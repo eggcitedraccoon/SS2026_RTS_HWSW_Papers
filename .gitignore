@@ -1,0 +1,5 @@
+/.idea/
+/src/**
+!/src/**/*.tex
+!/src/**/*.bib
+!/src/*.pdf

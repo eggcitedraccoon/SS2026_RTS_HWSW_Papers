@@ -1,0 +1,54 @@
+% !TeX program = latexmk
+% !TeX root = main.tex
+\documentclass[conference]{IEEEtran}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage{array}
+\usepackage[top=2cm,left=2cm,right=1.5cm,bottom=2cm]{geometry}
+\usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{positioning,shapes.geometric,arrows.meta}
+\bibliographystyle{IEEEtran}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% -------------------------------------------------------------------
+
+\begin{document}
+
+    \title{Paper Title}
+
+    \author{
+        \IEEEauthorblockN{2\textsuperscript{nd} Oleg Kelner}
+        \IEEEauthorblockA{
+            Hochschule Hamm-Lippstadt\\
+            Lippstadt, Germany\\
+            oleg.kelner@stud.hshl.de
+        }
+    }
+
+
+    \maketitle
+    \thispagestyle{plain}
+    \pagestyle{plain}
+    \pagenumbering{arabic}
+    \setcounter{page}{1}
+
+    \vspace{0.5em}
+    Text \cite{TestSource}
+    \bibliography{main}
+\end{document}

@@ -1,0 +1,43 @@
+name: Compile LaTeX
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      verbose:
+        description: 'Enable verbose output'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install LaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-bibtex-extra texlive-publishers texlive-science
+
+      - name: Compile LaTeX
+        run: |
+          cd src/
+          pdflatex -interaction=nonstopmode main.tex
+          bibtex main
+          pdflatex -interaction=nonstopmode main.tex
+          pdflatex -interaction=nonstopmode main.tex
+
+      - name: Push PDF
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add src/main.pdf
+          git commit -m "Update compiled seminar PDF [skip ci]" || echo "No changes to commit"
+          git push
