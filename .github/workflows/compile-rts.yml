@@ -1,9 +1,11 @@
-name: Compile LaTeX
+name: Compile RTS
 
 on:
   push:
     branches:
       - main
+    paths:
+      - "RTS/**"
   workflow_dispatch:
     inputs:
       verbose:
@@ -28,7 +30,7 @@ jobs:
 
       - name: Compile LaTeX
         run: |
-          cd src/
+          cd RTS/
           pdflatex -interaction=nonstopmode main.tex
           bibtex main
           pdflatex -interaction=nonstopmode main.tex
@@ -38,6 +40,6 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add src/main.pdf
+          git add RTS/main.pdf
           git commit -m "Update compiled seminar PDF [skip ci]" || echo "No changes to commit"
           git push
