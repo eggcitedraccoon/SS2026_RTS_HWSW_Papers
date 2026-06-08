@@ -1,5 +1,9 @@
 /.idea/
-/src/**
-!/src/**/*.tex
-!/src/**/*.bib
-!/src/*.pdf
+/RTS/*
+/HWSW/*
+!/RTS/**/*.tex
+!/RTS/**/*.bib
+!/RTS/*.pdf
+!/HWSW/**/*.tex
+!/HWSW/**/*.bib
+!/HWSW/*.pdf
