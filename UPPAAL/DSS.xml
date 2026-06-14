@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Global constants
+const int N = 3;         // 2 Periodic Tasks + 1 DSS
+const int DSS_ID = 2;    // ID of the DSS task
+const int Q_SIZE = 4;    // Replenishment queue size
+
+// Task Parameters: {T_i, C_i}
+int T[N] = {10, 20, 40}; // Periods
+int C[N] = {3, 4, 10};   // Capacity (Execution time)
+
+// System State
+int d[N];                // Absolute deadlines
+bool ready[N];           // Task is ready to execute
+int rem_c[N];            // Remaining computation time
+int budget = 10;          // Current DSS budget
+int cpu_task = -1;       // Currently executing task ID
+
+void select_task() {
+    int i;
+    int best = -1;
+    for (i = 0; i &lt; N; i++) {
+        if (ready[i]) {
+            if (best == -1 || d[i] &lt; d[best]) {
+                best = i;
+            }
+        }
+    }
+    cpu_task = best;
+}
+
+// Replenishment Queue for DSS
+struct Repl {
+    int time;
+    int amount;
+} queue[Q_SIZE];
+int head = 0, tail = 0;
+
+// Channels
+broadcast chan release[N];
+broadcast chan request;  // Aperiodic request arrival
+broadcast chan tick;     // Discrete time step
+int t;                   // Global time (discrete)
+</declaration>
+	<template>
+		<name>PeriodicTask</name>
+		<parameter>const int id</parameter>
+		<declaration>int p;</declaration>
+		<location id="id0" x="467" y="221">
+			<name x="457" y="191">Idle</name>
+		</location>
+		<location id="id1" x="697" y="119">
+			<name x="687" y="89">Ready</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id2">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="161" y="-15">tick?</label>
+			<label kind="assignment" x="161" y="0">p++, 
+if (p == T[id]) { p=0, rem_c[id]=C[id], d[id]=t+T[id], ready[id]=true; }</label>
+			<nail x="450" y="110"/>
+			<nail x="399" y="-93"/>
+		</transition>
+		<transition id="id3">
+			<source ref="id1"/>
+			<target ref="id0"/>
+			<label kind="guard" x="0" y="-30">rem_c[id] &lt;= 0</label>
+			<label kind="assignment" x="0" y="0">ready[id]=false</label>
+		</transition>
+		<transition id="id4">
+			<source ref="id1"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="649" y="99">tick?</label>
+			<label kind="assignment" x="654" y="246">p++, 
+if (p == T[id]) { p=0, rem_c[id]=C[id], d[id]=t+T[id], ready[id]=true; },
+if (cpu_task == id) { rem_c[id]--; }</label>
+			<nail x="807" y="16"/>
+			<nail x="807" y="212"/>
+		</transition>
+	</template>
+	<template>
+		<name>DSS</name>
+		<parameter>const int id</parameter>
+		<declaration>int consumed;
+int rem_req_c;</declaration>
+		<location id="id5" x="-212" y="0">
+			<name x="-222" y="-30">Idle</name>
+		</location>
+		<location id="id6" x="195" y="17">
+			<name x="221" y="-68">Active</name>
+		</location>
+		<init ref="id5"/>
+		<transition id="id7">
+			<source ref="id5"/>
+			<target ref="id6"/>
+			<label kind="guard" x="-144" y="-238">budget &gt; 0</label>
+			<label kind="synchronisation" x="-85" y="-76">request?</label>
+			<label kind="assignment" x="-178" y="144">d[id]=t+T[id], ready[id]=true, consumed=0, rem_req_c=5,
+tail = (tail + 1) % Q_SIZE,
+queue[tail].time = t + T[id]</label>
+			<nail x="17" y="-25"/>
+		</transition>
+		<transition id="id8">
+			<source ref="id6"/>
+			<target ref="id5"/>
+			<label kind="guard" x="17" y="-187">budget &lt;= 0 || rem_req_c &lt;= 0</label>
+			<label kind="assignment" x="-442" y="127">ready[id]=false,
+queue[tail].amount = consumed</label>
+			<nail x="34" y="93"/>
+		</transition>
+		<transition id="id9">
+			<source ref="id6"/>
+			<target ref="id6"/>
+			<label kind="synchronisation" x="109" y="-102">tick?</label>
+			<label kind="assignment" x="398" y="93">if (cpu_task == id) { budget--, consumed++, rem_req_c--; }</label>
+			<nail x="272" y="34"/>
+			<nail x="204" y="68"/>
+		</transition>
+		<transition id="id10">
+			<source ref="id6"/>
+			<target ref="id6"/>
+			<label kind="synchronisation" x="76" y="-59">request?</label>
+			<label kind="assignment" x="304" y="-17">rem_req_c += 5</label>
+			<nail x="165" y="-13"/>
+			<nail x="225" y="-13"/>
+		</transition>
+		<transition id="id11">
+			<source ref="id5"/>
+			<target ref="id5"/>
+			<label kind="guard" x="-730" y="-110">budget &lt;= 0</label>
+			<label kind="synchronisation" x="-560" y="8">request?</label>
+			<nail x="-242" y="-30"/>
+			<nail x="-182" y="-30"/>
+		</transition>
+	</template>
+	<template>
+		<name>Replenisher</name>
+		<location id="id12" x="0" y="0">
+		</location>
+		<init ref="id12"/>
+		<transition id="id13">
+			<source ref="id12"/>
+			<target ref="id12"/>
+			<label kind="synchronisation" x="-60" y="-15">tick?</label>
+			<label kind="assignment" x="-60" y="0">if (head != tail &amp;&amp; t &gt;= queue[(head+1)%Q_SIZE].time) {
+    head = (head+1)%Q_SIZE;
+    budget += queue[head].amount;
+}</label>
+			<nail x="-40" y="40"/>
+			<nail x="40" y="40"/>
+		</transition>
+	</template>
+	<template>
+		<name>Ticker</name>
+		<declaration>clock c;</declaration>
+		<location id="id14" x="0" y="0">
+			<label kind="invariant" x="-10" y="15">c &lt;= 1</label>
+		</location>
+		<init ref="id14"/>
+		<transition id="id15">
+			<source ref="id14"/>
+			<target ref="id14"/>
+			<label kind="guard" x="-60" y="-30">c == 1</label>
+			<label kind="synchronisation" x="-60" y="-15">tick!</label>
+			<label kind="assignment" x="-60" y="0">c=0, t++, select_task()</label>
+			<nail x="-30" y="-30"/>
+			<nail x="30" y="-30"/>
+		</transition>
+	</template>
+	<template>
+		<name>Source</name>
+		<declaration>clock p;</declaration>
+		<location id="id16" x="0" y="0">
+			<label kind="invariant" x="-10" y="15">p &lt;= 50</label>
+		</location>
+		<init ref="id16"/>
+		<transition id="id17">
+			<source ref="id16"/>
+			<target ref="id16"/>
+			<label kind="guard" x="-60" y="-30">p &gt;= 10</label>
+			<label kind="synchronisation" x="-60" y="-15">request!</label>
+			<label kind="assignment" x="-60" y="0">p=0</label>
+			<nail x="-40" y="-40"/>
+			<nail x="40" y="-40"/>
+		</transition>
+	</template>
+	<system>P0 = PeriodicTask(0);
+P1 = PeriodicTask(1);
+D2 = DSS(2);
+R = Replenisher();
+Src = Source();
+Tkr = Ticker();
+
+system P0, P1, D2, R, Src, Tkr;
+</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>The system is deadlock-free.</comment>
+		</query>
+		<query>
+			<formula>A[] (P0.Ready imply d[0] &gt;= t)</formula>
+			<comment>Task 0 always meets its deadline.</comment>
+		</query>
+		<query>
+			<formula>A[] (P1.Ready imply d[1] &gt;= t)</formula>
+			<comment>Task 1 always meets its deadline.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; D2.Active</formula>
+			<comment>The DSS can be activated.</comment>
+		</query>
+	</queries>
+</nta>

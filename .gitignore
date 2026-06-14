@@ -4,6 +4,7 @@
 !/RTS/**/*.tex
 !/RTS/**/*.bib
 !/RTS/*.pdf
+
 !/HWSW/**/*.tex
 !/HWSW/**/*.bib
 !/HWSW/*.pdf
