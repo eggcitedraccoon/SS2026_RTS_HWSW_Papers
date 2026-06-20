@@ -2,183 +2,489 @@
 <!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
 <nta>
 	<declaration>// Global constants
-const int N = 3;         // 2 Periodic Tasks + 1 DSS
-const int DSS_ID = 2;    // ID of the DSS task
-const int Q_SIZE = 4;    // Replenishment queue size
+		const int N = 3;         // 2 Periodic Tasks + 1 DSS
+		const int DSS_ID = 2;    // ID of the DSS task
 
-// Task Parameters: {T_i, C_i}
-int T[N] = {10, 20, 40}; // Periods
-int C[N] = {3, 4, 10};   // Capacity (Execution time)
+		// Channels
+		broadcast chan tick;     // Discrete time step
+		broadcast chan request;  // Aperiodic request arrival
+		broadcast chan reschedule; // Force CPU and tasks to update their states
 
-// System State
-int d[N];                // Absolute deadlines
-bool ready[N];           // Task is ready to execute
-int rem_c[N];            // Remaining computation time
-int budget = 10;          // Current DSS budget
-int cpu_task = -1;       // Currently executing task ID
+		// Common System State
+		int cpu_task = -1;       // Currently executing task ID
+		int budget = 10;         // Current DSS budget
+		const int MAX_BUDGET = 10;
+		int rem_req_c = 0;       // Remaining capacity for current DSS request
 
-void select_task() {
-    int i;
-    int best = -1;
-    for (i = 0; i &lt; N; i++) {
-        if (ready[i]) {
-            if (best == -1 || d[i] &lt; d[best]) {
-                best = i;
-            }
-        }
-    }
-    cpu_task = best;
-}
+		// Task Parameters: {T_i, C_i}
+		int T[N] = {10, 20, 40}; // Periods
+		int C[N] = {3, 4, 10};   // Capacity (Execution time)
 
-// Replenishment Queue for DSS
-struct Repl {
-    int time;
-    int amount;
-} queue[Q_SIZE];
-int head = 0, tail = 0;
+		// Dynamic Task State (Relative)
+		int rel_d[N] = {10, 20, 40};        // Relative deadlines
+		bool ready[N] = {true, true, false}; // Task is ready to execute
+		int rem_c[N] = {3, 4, 0};            // Remaining computation time
+		int p[N] = {0, 0, 0};                // Phase/timer for periodic tasks
 
-// Channels
-broadcast chan release[N];
-broadcast chan request;  // Aperiodic request arrival
-broadcast chan tick;     // Discrete time step
-int t;                   // Global time (discrete)
-</declaration>
+		// Global Functions
+		void select_task() {
+		int i;
+		int best = -1;
+		for (i = 0; i &lt; N; i++) {
+		bool is_really_ready = false;
+		if (i == DSS_ID) {
+		if (budget &gt; 0 &amp;&amp; rem_req_c &gt; 0) is_really_ready = true;
+		} else {
+		if (ready[i] &amp;&amp; rem_c[i] &gt; 0) is_really_ready = true;
+		}
+		if (is_really_ready) {
+		if (best == -1 || rel_d[i] &lt; rel_d[best]) {
+		best = i;
+		}
+		}
+		}
+		cpu_task = best;
+		}
+
+		void update_periodic(int id) {
+		if (cpu_task == id &amp;&amp; rem_c[id] &gt; 0) {
+		rem_c[id]--;
+		if (rem_c[id] == 0) ready[id] = false;
+		}
+		if (ready[id] &amp;&amp; rel_d[id] &gt; -10) rel_d[id]--;
+		if (p[id] &lt; T[id]) p[id]++;
+		if (p[id] == T[id]) {
+		p[id] = 0;
+		rem_c[id] = C[id];
+		rel_d[id] = T[id];
+		ready[id] = true;
+		}
+		}
+
+		// Replenishment Queue for DSS
+		const int Q_SIZE = 11;
+		int repl_amt[Q_SIZE];
+		int repl_t[Q_SIZE];
+		int head = 0;
+		int tail = 0;
+		int repl_count = 0;
+
+		int current_burst_amt = 0;
+		int burst_timer = 0;
+		bool in_burst = false;
+
+		void update_dss(int id) {
+		int i;
+		// 1. Progress existing replenishments
+		for (i = 0; i &lt; repl_count; i++) {
+		int idx = (head + i) % Q_SIZE;
+		if (repl_t[idx] &gt; 0) {
+		repl_t[idx]--;
+		}
+		}
+
+		// 2. Check for completed replenishments
+		while (repl_count &gt; 0 &amp;&amp; repl_t[head] == 0) {
+		budget += repl_amt[head];
+		if (budget &gt; MAX_BUDGET) budget = MAX_BUDGET;
+		head = (head + 1) % Q_SIZE;
+		repl_count--;
+		}
+
+		// 3. Handle Consumption and Burst
+		if (in_burst) {
+		if (cpu_task == id &amp;&amp; budget &gt; 0) {
+		budget--;
+		rem_req_c--;
+		current_burst_amt++;
+		}
+		if (burst_timer &gt; 0) burst_timer--;
+
+		// FIX (bandwidth preservation): a full T_s has elapsed while the
+		// server is still active (e.g. it was preempted, not exhausted).
+		// Settle whatever has been consumed so far right now, and open a
+		// fresh replenishment window for whatever gets consumed next,
+		// instead of letting burst_timer sit at 0 and replenishing the
+		// *entire* burst immediately once it eventually ends.
+		if (burst_timer == 0 &amp;&amp; rem_req_c &gt; 0 &amp;&amp; budget &gt; 0) {
+		if (current_burst_amt &gt; 0) {
+		repl_amt[tail] = current_burst_amt;
+		repl_t[tail] = 0;
+		tail = (tail + 1) % Q_SIZE;
+		repl_count++;
+		}
+		current_burst_amt = 0;
+		burst_timer = T[id];
+		}
+
+		// End of burst: no more requests OR out of budget
+		if (rem_req_c == 0 || budget == 0) {
+		if (current_burst_amt &gt; 0) {
+		repl_amt[tail] = current_burst_amt;
+		repl_t[tail] = burst_timer;
+		tail = (tail + 1) % Q_SIZE;
+		repl_count++;
+		}
+		in_burst = false;
+		}
+		} else {
+		// Potential start of burst
+		if (rem_req_c &gt; 0 &amp;&amp; budget &gt; 0) {
+		in_burst = true;
+		burst_timer = T[id];
+		current_burst_amt = 0;
+		// FIX (deadline integrity): rel_d[id] is intentionally NOT
+		// touched here. It is the EDF urgency of the pending request
+		// and must only be set on genuine request arrival (see the
+		// request? transitions in the DSS template). Resetting it
+		// here every time a new burst starts let replenishment
+		// bookkeeping silently overwrite real task urgency.
+
+		if (cpu_task == id) {
+		budget--;
+		rem_req_c--;
+		current_burst_amt++;
+		}
+		if (burst_timer &gt; 0) burst_timer--;
+
+		// Check if burst ended immediately
+		if (rem_req_c == 0 || budget == 0) {
+		if (current_burst_amt &gt; 0) {
+		repl_amt[tail] = current_burst_amt;
+		repl_t[tail] = burst_timer;
+		tail = (tail + 1) % Q_SIZE;
+		repl_count++;
+		}
+		in_burst = false;
+		}
+		}
+		}
+
+		// 4. Deadline countdown for DSS (driven purely by request arrival;
+		// never reset by burst/replenishment bookkeeping above)
+		if (rem_req_c &gt; 0 &amp;&amp; rel_d[id] &gt; -10) {
+		rel_d[id]--;
+		}
+		}
+	</declaration>
 	<template>
 		<name>PeriodicTask</name>
 		<parameter>const int id</parameter>
-		<declaration>int p;</declaration>
-		<location id="id0" x="467" y="221">
-			<name x="457" y="191">Idle</name>
+		<location id="id0" x="0" y="0">
+			<name x="-10" y="-30">Idle</name>
 		</location>
-		<location id="id1" x="697" y="119">
-			<name x="687" y="89">Ready</name>
+		<location id="id1" x="150" y="0">
+			<name x="140" y="-30">Ready</name>
+		</location>
+		<location id="id2" x="300" y="0">
+			<name x="290" y="-30">Active</name>
 		</location>
 		<init ref="id0"/>
-		<transition id="id2">
+		<transition id="id3">
 			<source ref="id0"/>
 			<target ref="id1"/>
-			<label kind="synchronisation" x="161" y="-15">tick?</label>
-			<label kind="assignment" x="161" y="0">p++, 
-if (p == T[id]) { p=0, rem_c[id]=C[id], d[id]=t+T[id], ready[id]=true; }</label>
-			<nail x="450" y="110"/>
-			<nail x="399" y="-93"/>
-		</transition>
-		<transition id="id3">
-			<source ref="id1"/>
-			<target ref="id0"/>
-			<label kind="guard" x="0" y="-30">rem_c[id] &lt;= 0</label>
-			<label kind="assignment" x="0" y="0">ready[id]=false</label>
+			<label kind="guard" x="50" y="-40">ready[id] &amp;&amp; cpu_task != id</label>
+			<label kind="synchronisation" x="50" y="-20">tick?</label>
+			<label kind="assignment" x="50" y="0">update_periodic(id)</label>
 		</transition>
 		<transition id="id4">
+			<source ref="id0"/>
+			<target ref="id2"/>
+			<label kind="guard" x="100" y="-80">ready[id] &amp;&amp; cpu_task == id</label>
+			<label kind="synchronisation" x="100" y="-60">tick?</label>
+			<label kind="assignment" x="100" y="-40">update_periodic(id)</label>
+			<nail x="50" y="-50"/>
+			<nail x="250" y="-50"/>
+		</transition>
+		<transition id="id5">
 			<source ref="id1"/>
 			<target ref="id1"/>
-			<label kind="synchronisation" x="649" y="99">tick?</label>
-			<label kind="assignment" x="654" y="246">p++, 
-if (p == T[id]) { p=0, rem_c[id]=C[id], d[id]=t+T[id], ready[id]=true; },
-if (cpu_task == id) { rem_c[id]--; }</label>
-			<nail x="807" y="16"/>
-			<nail x="807" y="212"/>
+			<label kind="synchronisation" x="140" y="50">tick?</label>
+			<label kind="assignment" x="140" y="70">update_periodic(id)</label>
+			<nail x="130" y="50"/>
+			<nail x="170" y="50"/>
+		</transition>
+		<transition id="id6">
+			<source ref="id2"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="290" y="50">tick?</label>
+			<label kind="assignment" x="290" y="70">update_periodic(id)</label>
+			<nail x="280" y="50"/>
+			<nail x="320" y="50"/>
+		</transition>
+		<transition id="id7">
+			<source ref="id0"/>
+			<target ref="id0"/>
+			<label kind="guard" x="-100" y="-20">!ready[id]</label>
+			<label kind="synchronisation" x="-100" y="0">tick?</label>
+			<label kind="assignment" x="-100" y="20">update_periodic(id)</label>
+			<nail x="-30" y="-50"/>
+			<nail x="-70" y="-50"/>
+		</transition>
+		<transition id="id8">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="guard" x="180" y="-40">cpu_task == id</label>
+			<label kind="synchronisation" x="180" y="-20">reschedule?</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id2"/>
+			<target ref="id1"/>
+			<label kind="guard" x="180" y="20">cpu_task != id &amp;&amp; ready[id]</label>
+			<label kind="synchronisation" x="180" y="40">reschedule?</label>
+			<nail x="250" y="30"/>
+			<nail x="200" y="30"/>
+		</transition>
+		<transition id="id10">
+			<source ref="id2"/>
+			<target ref="id0"/>
+			<label kind="guard" x="150" y="80">!ready[id]</label>
+			<label kind="synchronisation" x="150" y="100">reschedule?</label>
+			<nail x="280" y="80"/>
+			<nail x="20" y="80"/>
+		</transition>
+		<transition id="id11">
+			<source ref="id1"/>
+			<target ref="id0"/>
+			<label kind="guard" x="50" y="40">!ready[id]</label>
+			<label kind="synchronisation" x="50" y="60">reschedule?</label>
+			<nail x="130" y="40"/>
+			<nail x="20" y="40"/>
+		</transition>
+		<transition id="id12">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="guard" x="30" y="-60">ready[id] &amp;&amp; cpu_task != id</label>
+			<label kind="synchronisation" x="30" y="-45">reschedule?</label>
+			<nail x="40" y="-30"/>
+			<nail x="110" y="-30"/>
+		</transition>
+		<transition id="id13">
+			<source ref="id0"/>
+			<target ref="id2"/>
+			<label kind="guard" x="100" y="-120">ready[id] &amp;&amp; cpu_task == id</label>
+			<label kind="synchronisation" x="100" y="-105">reschedule?</label>
+			<nail x="30" y="-100"/>
+			<nail x="270" y="-100"/>
 		</transition>
 	</template>
 	<template>
 		<name>DSS</name>
 		<parameter>const int id</parameter>
-		<declaration>int consumed;
-int rem_req_c;</declaration>
-		<location id="id5" x="-212" y="0">
-			<name x="-222" y="-30">Idle</name>
+		<location id="id14" x="0" y="0">
+			<name x="-10" y="-30">Idle</name>
 		</location>
-		<location id="id6" x="195" y="17">
-			<name x="221" y="-68">Active</name>
+		<location id="id15" x="150" y="0">
+			<name x="140" y="-30">Ready</name>
 		</location>
-		<init ref="id5"/>
-		<transition id="id7">
-			<source ref="id5"/>
-			<target ref="id6"/>
-			<label kind="guard" x="-144" y="-238">budget &gt; 0</label>
-			<label kind="synchronisation" x="-85" y="-76">request?</label>
-			<label kind="assignment" x="-178" y="144">d[id]=t+T[id], ready[id]=true, consumed=0, rem_req_c=5,
-tail = (tail + 1) % Q_SIZE,
-queue[tail].time = t + T[id]</label>
-			<nail x="17" y="-25"/>
+		<location id="id16" x="300" y="0">
+			<name x="290" y="-30">Active</name>
+		</location>
+		<init ref="id14"/>
+		<transition id="id17">
+			<source ref="id14"/>
+			<target ref="id15"/>
+			<label kind="guard" x="50" y="-60">rem_req_c &lt; 20</label>
+			<label kind="synchronisation" x="50" y="-40">request?</label>
+			<label kind="assignment" x="50" y="-20">rem_req_c += 5, rel_d[id]=T[id]</label>
 		</transition>
-		<transition id="id8">
-			<source ref="id6"/>
-			<target ref="id5"/>
-			<label kind="guard" x="17" y="-187">budget &lt;= 0 || rem_req_c &lt;= 0</label>
-			<label kind="assignment" x="-442" y="127">ready[id]=false,
-queue[tail].amount = consumed</label>
-			<nail x="34" y="93"/>
+		<transition id="id18">
+			<source ref="id15"/>
+			<target ref="id15"/>
+			<label kind="guard" x="140" y="-100">rem_req_c &lt; 20</label>
+			<label kind="synchronisation" x="140" y="-80">request?</label>
+			<label kind="assignment" x="140" y="-60">rem_req_c += 5</label>
+			<nail x="130" y="-50"/>
+			<nail x="170" y="-50"/>
 		</transition>
-		<transition id="id9">
-			<source ref="id6"/>
-			<target ref="id6"/>
-			<label kind="synchronisation" x="109" y="-102">tick?</label>
-			<label kind="assignment" x="398" y="93">if (cpu_task == id) { budget--, consumed++, rem_req_c--; }</label>
-			<nail x="272" y="34"/>
-			<nail x="204" y="68"/>
+		<transition id="id19">
+			<source ref="id16"/>
+			<target ref="id16"/>
+			<label kind="guard" x="290" y="-100">rem_req_c &lt; 20</label>
+			<label kind="synchronisation" x="290" y="-80">request?</label>
+			<label kind="assignment" x="290" y="-60">rem_req_c += 5</label>
+			<nail x="280" y="-50"/>
+			<nail x="320" y="-50"/>
 		</transition>
-		<transition id="id10">
-			<source ref="id6"/>
-			<target ref="id6"/>
-			<label kind="synchronisation" x="76" y="-59">request?</label>
-			<label kind="assignment" x="304" y="-17">rem_req_c += 5</label>
-			<nail x="165" y="-13"/>
-			<nail x="225" y="-13"/>
+		<transition id="id20">
+			<source ref="id14"/>
+			<target ref="id14"/>
+			<label kind="synchronisation" x="-100" y="-20">tick?</label>
+			<label kind="assignment" x="-100" y="0">update_dss(id)</label>
+			<nail x="-30" y="-50"/>
+			<nail x="-70" y="-50"/>
 		</transition>
-		<transition id="id11">
-			<source ref="id5"/>
-			<target ref="id5"/>
-			<label kind="guard" x="-730" y="-110">budget &lt;= 0</label>
-			<label kind="synchronisation" x="-560" y="8">request?</label>
-			<nail x="-242" y="-30"/>
-			<nail x="-182" y="-30"/>
+		<transition id="id21">
+			<source ref="id15"/>
+			<target ref="id15"/>
+			<label kind="synchronisation" x="120" y="50">tick?</label>
+			<label kind="assignment" x="120" y="70">update_dss(id)</label>
+			<nail x="130" y="50"/>
+			<nail x="170" y="50"/>
+		</transition>
+		<transition id="id22">
+			<source ref="id16"/>
+			<target ref="id16"/>
+			<label kind="synchronisation" x="290" y="50">tick?</label>
+			<label kind="assignment" x="290" y="70">update_dss(id)</label>
+			<nail x="280" y="50"/>
+			<nail x="320" y="50"/>
+		</transition>
+		<transition id="id23">
+			<source ref="id14"/>
+			<target ref="id16"/>
+			<label kind="guard" x="100" y="-120">rem_req_c &gt; 0 &amp;&amp; cpu_task == id</label>
+			<label kind="synchronisation" x="100" y="-100">reschedule?</label>
+			<nail x="50" y="-80"/>
+			<nail x="250" y="-80"/>
+		</transition>
+		<transition id="id24">
+			<source ref="id16"/>
+			<target ref="id14"/>
+			<label kind="guard" x="100" y="80">rem_req_c &lt;= 0</label>
+			<label kind="synchronisation" x="100" y="100">reschedule?</label>
+			<nail x="250" y="80"/>
+			<nail x="50" y="80"/>
+		</transition>
+		<transition id="id25">
+			<source ref="id14"/>
+			<target ref="id15"/>
+			<label kind="guard" x="20" y="20">rem_req_c &gt; 0 &amp;&amp; cpu_task != id</label>
+			<label kind="synchronisation" x="20" y="40">reschedule?</label>
+			<nail x="40" y="30"/>
+			<nail x="110" y="30"/>
+		</transition>
+		<transition id="id26">
+			<source ref="id15"/>
+			<target ref="id14"/>
+			<label kind="guard" x="20" y="-60">rem_req_c &lt;= 0</label>
+			<label kind="synchronisation" x="20" y="-40">reschedule?</label>
+			<nail x="110" y="-30"/>
+			<nail x="40" y="-30"/>
+		</transition>
+		<transition id="id27">
+			<source ref="id15"/>
+			<target ref="id16"/>
+			<label kind="guard" x="180" y="-40">cpu_task == id</label>
+			<label kind="synchronisation" x="180" y="-20">reschedule?</label>
+		</transition>
+		<transition id="id28">
+			<source ref="id16"/>
+			<target ref="id15"/>
+			<label kind="guard" x="180" y="20">cpu_task != id &amp;&amp; rem_req_c &gt; 0</label>
+			<label kind="synchronisation" x="180" y="40">reschedule?</label>
+			<nail x="260" y="30"/>
+			<nail x="190" y="30"/>
+		</transition>
+		<transition id="id29">
+			<source ref="id14"/>
+			<target ref="id14"/>
+			<label kind="guard" x="-120" y="40">rem_req_c &lt;= 0</label>
+			<label kind="synchronisation" x="-120" y="60">reschedule?</label>
+			<nail x="-30" y="50"/>
+			<nail x="30" y="50"/>
+		</transition>
+		<transition id="id30">
+			<source ref="id15"/>
+			<target ref="id15"/>
+			<label kind="guard" x="120" y="90">rem_req_c &gt; 0 &amp;&amp; cpu_task != id</label>
+			<label kind="synchronisation" x="120" y="110">reschedule?</label>
+			<nail x="130" y="90"/>
+			<nail x="170" y="90"/>
+		</transition>
+		<transition id="id31">
+			<source ref="id16"/>
+			<target ref="id16"/>
+			<label kind="guard" x="280" y="90">rem_req_c &gt; 0 &amp;&amp; cpu_task == id</label>
+			<label kind="synchronisation" x="280" y="110">reschedule?</label>
+			<nail x="280" y="90"/>
+			<nail x="320" y="90"/>
 		</transition>
 	</template>
 	<template>
-		<name>Replenisher</name>
-		<location id="id12" x="0" y="0">
+		<name>CPU</name>
+		<location id="id32" x="0" y="0">
+			<name x="-10" y="-30">Idle</name>
 		</location>
-		<init ref="id12"/>
-		<transition id="id13">
-			<source ref="id12"/>
-			<target ref="id12"/>
-			<label kind="synchronisation" x="-60" y="-15">tick?</label>
-			<label kind="assignment" x="-60" y="0">if (head != tail &amp;&amp; t &gt;= queue[(head+1)%Q_SIZE].time) {
-    head = (head+1)%Q_SIZE;
-    budget += queue[head].amount;
-}</label>
-			<nail x="-40" y="40"/>
-			<nail x="40" y="40"/>
+		<location id="id33" x="263" y="0">
+			<name x="253" y="-30">Busy</name>
+		</location>
+		<init ref="id32"/>
+		<transition id="id34">
+			<source ref="id32"/>
+			<target ref="id33"/>
+			<label kind="guard" x="42" y="-30">cpu_task != -1</label>
+			<label kind="synchronisation" x="42" y="-15">reschedule?</label>
+		</transition>
+		<transition id="id35">
+			<source ref="id33"/>
+			<target ref="id32"/>
+			<label kind="guard" x="42" y="30">cpu_task == -1</label>
+			<label kind="synchronisation" x="42" y="45">reschedule?</label>
+			<nail x="204" y="42"/>
+			<nail x="68" y="51"/>
+		</transition>
+		<transition id="id36">
+			<source ref="id32"/>
+			<target ref="id32"/>
+			<label kind="guard" x="-100" y="10">cpu_task == -1</label>
+			<label kind="synchronisation" x="-100" y="30">reschedule?</label>
+			<nail x="-30" y="40"/>
+			<nail x="30" y="40"/>
+		</transition>
+		<transition id="id37">
+			<source ref="id33"/>
+			<target ref="id33"/>
+			<label kind="guard" x="300" y="10">cpu_task != -1</label>
+			<label kind="synchronisation" x="300" y="30">reschedule?</label>
+			<nail x="230" y="40"/>
+			<nail x="290" y="40"/>
 		</transition>
 	</template>
 	<template>
 		<name>Ticker</name>
 		<declaration>clock c;</declaration>
-		<location id="id14" x="0" y="0">
+		<location id="id38" x="0" y="0">
+			<name x="-10" y="-30">Wait</name>
 			<label kind="invariant" x="-10" y="15">c &lt;= 1</label>
 		</location>
-		<init ref="id14"/>
-		<transition id="id15">
-			<source ref="id14"/>
-			<target ref="id14"/>
-			<label kind="guard" x="-60" y="-30">c == 1</label>
-			<label kind="synchronisation" x="-60" y="-15">tick!</label>
-			<label kind="assignment" x="-60" y="0">c=0, t++, select_task()</label>
-			<nail x="-30" y="-30"/>
-			<nail x="30" y="-30"/>
+		<location id="id39" x="150" y="0">
+			<name x="140" y="-30">Reschedule</name>
+			<urgent/>
+		</location>
+		<location id="id40" x="0" y="-100">
+			<name x="-10" y="-130">Start</name>
+			<urgent/>
+		</location>
+		<init ref="id40"/>
+		<transition id="id41">
+			<source ref="id40"/>
+			<target ref="id39"/>
+			<label kind="assignment" x="10" y="-80">select_task()</label>
+		</transition>
+		<transition id="id42">
+			<source ref="id38"/>
+			<target ref="id39"/>
+			<label kind="guard" x="50" y="-40">c == 1</label>
+			<label kind="synchronisation" x="50" y="-20">tick!</label>
+			<label kind="assignment" x="50" y="0">c=0, select_task()</label>
+		</transition>
+		<transition id="id43">
+			<source ref="id39"/>
+			<target ref="id38"/>
+			<label kind="synchronisation" x="50" y="20">reschedule!</label>
 		</transition>
 	</template>
 	<template>
 		<name>Source</name>
 		<declaration>clock p;</declaration>
-		<location id="id16" x="0" y="0">
+		<location id="id44" x="0" y="0">
 			<label kind="invariant" x="-10" y="15">p &lt;= 50</label>
 		</location>
-		<init ref="id16"/>
-		<transition id="id17">
-			<source ref="id16"/>
-			<target ref="id16"/>
+		<init ref="id44"/>
+		<transition id="id45">
+			<source ref="id44"/>
+			<target ref="id44"/>
 			<label kind="guard" x="-60" y="-30">p &gt;= 10</label>
 			<label kind="synchronisation" x="-60" y="-15">request!</label>
 			<label kind="assignment" x="-60" y="0">p=0</label>
@@ -186,31 +492,59 @@ queue[tail].amount = consumed</label>
 			<nail x="40" y="-40"/>
 		</transition>
 	</template>
-	<system>P0 = PeriodicTask(0);
-P1 = PeriodicTask(1);
-D2 = DSS(2);
-R = Replenisher();
-Src = Source();
-Tkr = Ticker();
+	<system>// Process instantiations
+		P0 = PeriodicTask(0);
+		P1 = PeriodicTask(1);
+		D2 = DSS(2);
+		Src = Source();
+		Tkr = Ticker();
+		Cpu = CPU();
 
-system P0, P1, D2, R, Src, Tkr;
-</system>
+		// List processes to be composed into a system.
+		system P0, P1, D2, Src, Tkr, Cpu;
+	</system>
 	<queries>
 		<query>
 			<formula>A[] not deadlock</formula>
 			<comment>The system is deadlock-free.</comment>
 		</query>
 		<query>
-			<formula>A[] (P0.Ready imply d[0] &gt;= t)</formula>
-			<comment>Task 0 always meets its deadline.</comment>
+			<formula>A[] forall (i : int[0, 1]) (rel_d[i] &gt;= -1)</formula>
+			<comment>Periodic tasks always meet their deadlines.</comment>
 		</query>
 		<query>
-			<formula>A[] (P1.Ready imply d[1] &gt;= t)</formula>
-			<comment>Task 1 always meets its deadline.</comment>
+			<formula>A[] (rem_req_c &gt; 0 imply rel_d[DSS_ID] &gt;= -1)</formula>
+			<comment>NEW: the aperiodic request being serviced by the DSS also meets its deadline. Previously rel_d[DSS_ID] was never checked, which is how the burst-bookkeeping bug stayed hidden.</comment>
 		</query>
 		<query>
 			<formula>E&lt;&gt; D2.Active</formula>
-			<comment>The DSS can be activated.</comment>
+			<comment>The DSS can be active (servicing requests).</comment>
+			<result outcome="success" type="quality" timestamp="2026-06-20 18:39:54 +0200">
+			</result>
+		</query>
+		<query>
+			<formula>A[] budget &gt;= 0 &amp;&amp; budget &lt;= MAX_BUDGET</formula>
+			<comment>DSS budget remains within valid bounds.</comment>
+		</query>
+		<query>
+			<formula>A[] (Tkr.Wait imply (D2.Active imply cpu_task == DSS_ID))</formula>
+			<comment>DSS is Active only when assigned to CPU (in stable state).</comment>
+		</query>
+		<query>
+			<formula>A[] (Tkr.Wait imply (P0.Active imply cpu_task == 0))</formula>
+			<comment>Task P0 is Active only when assigned to CPU.</comment>
+		</query>
+		<query>
+			<formula>A[] (Tkr.Wait imply (P1.Active imply cpu_task == 1))</formula>
+			<comment>Task P1 is Active only when assigned to CPU.</comment>
+		</query>
+		<query>
+			<formula>A[] (Tkr.Wait imply (Cpu.Busy imply cpu_task != -1))</formula>
+			<comment>CPU Busy implies a task is assigned.</comment>
+		</query>
+		<query>
+			<formula>A[] (Tkr.Wait imply (Cpu.Idle imply cpu_task == -1))</formula>
+			<comment>CPU Idle implies no task is assigned.</comment>
 		</query>
 	</queries>
 </nta>
