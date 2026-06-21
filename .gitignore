@@ -1,4 +1,5 @@
 /.idea/
+/**/.venv/
 /RTS/*
 /HWSW/*
 !/RTS/**/*.tex

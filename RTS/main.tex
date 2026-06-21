@@ -54,29 +54,44 @@
 
 
     \section{Introduction}
-    % TODO: Check additional references from HSHL library, O'Reilly, IEEE Xplore, and ACM Digital Library.
-    % Suggested reading: \cite{Buttazzo2011} for general real-time systems theory.
-    Real-time systems are increasingly complex, often requiring the simultaneous execution of periodic activities (e.g., control loops) and sporadic or aperiodic activities (e.g., operator inputs or sensory data updates). Periodic tasks typically possess hard deadlines, meaning a single failure to meet them can result in catastrophic consequences. Aperiodic tasks, conversely, often have soft deadlines where timing is desirable but not strictly critical.
+    Real-time systems are increasingly required to support a mixture of workloads within a single processor: periodic activities such as control loops and sensor sampling, and aperiodic or sporadic activities such as operator inputs, fault handling, or event-driven sensor updates. Periodic tasks are typically associated with hard deadlines, where a single missed deadline can compromise system safety or correctness. Aperiodic tasks, by contrast, usually carry soft deadlines: timely service is desirable for system responsiveness, but an occasional delay does not lead to catastrophic failure. The scheduling problem is therefore not merely to guarantee the hard periodic task set, but to do so while minimising the average response time of the aperiodic workload, since a real-time system that is technically correct but unresponsive to operator or sensor events is of limited practical value.
 
-    The historical approach of scheduling aperiodic tasks as background activities—executing only when no periodic tasks are ready—frequently leads to unacceptably high average response times. While polling servers improved this by allocating specific slots for aperiodic service, they suffer from inefficiency; if no aperiodic request is present at the start of a polling period, the allocated capacity is wasted. To address this, "bandwidth-preserving" algorithms like the Sporadic Server (SS) were developed. The Dynamic Sporadic Server (DSS) is a specific adaptation for systems utilizing the Earliest Deadline First (EDF) scheduling policy.
+    The mechanisms used to schedule periodic tasks fall broadly into two families: fixed-priority policies, such as Rate Monotonic (RM), where a task's priority is static and derived from its period, and dynamic-priority policies, such as Earliest Deadline First (EDF), where priority is recomputed continuously from each task's current absolute deadline. EDF is of particular interest because it is optimal among preemptive uniprocessor scheduling algorithms with respect to schedulability: any periodic task set with total utilisation $U \leq 1$ is feasible under EDF. This optimality, however, complicates the design of mechanisms for aperiodic service, since most early aperiodic-service algorithms were developed for the simpler, static priority ordering of fixed-priority systems and do not transfer directly to a deadline-driven environment.
 
+    The simplest treatment of aperiodic tasks is \emph{background scheduling}, in which aperiodic requests execute only in the idle intervals left by periodic tasks. This approach imposes no risk to the periodic guarantee but produces poor average response times whenever the periodic load is moderate to high, since aperiodic requests may be starved indefinitely behind periodic execution. The \emph{Polling Server} (PS) \cite{Strosnider1995} improves on this by reserving a fixed capacity $C_s$ within every period $T_s$, scheduled with a priority appropriate to $T_s$, for the exclusive use of aperiodic requests. The weakness of PS is that this capacity is only available at the instant the period begins: if no aperiodic request is pending at that instant, the capacity is discarded, even if a request arrives moments later. This idling behaviour makes PS \emph{bandwidth-wasting} rather than \emph{bandwidth-preserving}.
+
+    The \emph{Deferrable Server} (DS) \cite{Strosnider1995} addresses this specific weakness by allowing the server to retain its capacity throughout the period instead of discarding it immediately, so that a late-arriving aperiodic request can still be served at the server's priority. This preserves the server's responsiveness but introduces a more subtle problem: because capacity can be deferred and then immediately replenished at the start of the following period, a worst-case sequence of requests allows the server to execute, in effect, up to twice its budget within an interval no larger than $T_s$. This so-called "double hit" or "back-to-back execution" anomaly inflates the interference experienced by lower-priority periodic tasks beyond what is assumed in standard RM schedulability analysis, and consequently requires a pessimistic correction to the periodic task set's response-time analysis to remain safe.
+
+    The \emph{Sporadic Server} (SS) \cite{Sprunt1989} was proposed specifically to eliminate this anomaly while retaining capacity-preservation. Rather than replenishing capacity unconditionally at fixed period boundaries, SS ties each replenishment to the instant at which the corresponding capacity was \emph{consumed}, delayed by exactly one server period $T_s$. This rule guarantees that the server's interference on the periodic task set never exceeds what a periodic task of the same period and capacity would cause, restoring exact RM schedulability analysis without the pessimistic correction required by DS. SS is, however, formulated entirely in terms of fixed priority levels and active priority tracking, which has no direct counterpart in EDF, where a task's "priority" (its absolute deadline) changes continuously as time advances.
+
+    For EDF-scheduled systems, several dynamic-priority counterparts to these bandwidth-preserving servers have since been proposed. The \emph{Total Bandwidth Server} (TBS) \cite{Spuri1996} assigns each arriving aperiodic request a deadline computed from the server's reserved utilisation $U_s$ and the deadline of the previous request, guaranteeing that the server never consumes more than its allotted bandwidth over any interval. The \emph{Constant Bandwidth Server} (CBS) \cite{Abeni1998} refines this further by postponing the server's deadline whenever its budget is exhausted before the next replenishment, which provides strong temporal isolation between the server and the rest of the task set even in the presence of execution-time overruns. The \emph{Dynamic Sporadic Server} (DSS) \cite{Spuri1996}, the subject of this work, takes a different route: rather than computing deadlines from a bandwidth formula, it carries the SS replenishment rule itself over into EDF, reformulating "replenish $C_s$ at $T_s$ after consumption" in terms of deadlines rather than priority levels. Compared to TBS and CBS, DSS retains a closer structural relationship to its fixed-priority ancestor, which makes its behaviour and schedulability argument easier to relate directly to the well-understood SS analysis, at the cost of being somewhat less flexible in handling budget overruns than CBS's deadline-postponement mechanism. Compared to background and polling service, DSS is bandwidth-preserving by construction and therefore offers substantially better average response time for the same guaranteed periodic schedule.
 
     \section{Problem Statement}
-    The central problem addressed by the DSS algorithm is the optimisation of average response times for soft aperiodic tasks while guaranteeing 100\% schedulability for hard periodic tasks. In a dynamic priority environment like EDF, priorities are assigned based on absolute deadlines. A simple server might "double hit" the system by demanding its full capacity at the beginning of every period, regardless of when it actually executes, which can cause periodic tasks to miss their deadlines.
 
-    Therefore, the DSS must implement a replenishment scheme that allows it to preserve its capacity until a request arrives, effectively "shifting" its high-priority execution window to the moment of actual demand without overloading the processor. The challenge lies in defining a replenishment rule that maintains temporal isolation between the server and other tasks.
+    The central problem addressed by the DSS algorithm is to optimise the average response time of soft aperiodic requests under EDF, while guaranteeing that the hard periodic task set remains exactly as schedulable as it would be without the server present — that is, the server must behave, from the periodic tasks' perspective, indistinguishably from an ordinary periodic task of utilisation $U_s = C_s / T_s$.
 
+    This requirement is non-trivial precisely because EDF assigns priority through absolute deadlines rather than static levels. A naïve dynamic-priority server that simply restores its full capacity $C_s$ and assigns itself a new deadline $d = t + T_s$ at every period boundary, irrespective of whether or when it actually executed, can "double hit" the system: if the server is granted a fresh deadline before its previous capacity has been fully consumed or accounted for, it can demand its budget twice within an interval shorter than $T_s$, exactly the anomaly that the original Sporadic Server was designed to prevent in the fixed-priority case. Under EDF, this excess demand manifests not as a priority-inversion problem but as an unaccounted increase in the server's effective utilisation within a bounded interval, which can cause periodic deadlines to be missed despite $U \leq 1$.
+
+    The challenge, therefore, is to define a replenishment rule for $C_s$ that:
+    \begin{enumerate}
+        \item preserves the server's capacity from the start of its period until an aperiodic request actually arrives, so that responsiveness is not sacrificed to idling, as in PS;
+        \item replenishes consumed capacity no earlier than exactly one server period after it was consumed, so that the server's cumulative demand over any interval of length $T_s$ never exceeds $C_s$, avoiding the DS anomaly; and
+        \item expresses this rule purely in terms of deadlines and consumption instants, since EDF has no notion of a static "active priority level" to track, unlike the original SS formulation.
+    \end{enumerate}
+
+    A further subtlety is the interaction between the server's own deadline and the deadlines of the aperiodic requests it serves: since EDF priority follows directly from deadline, the rule used to assign and update the server's deadline at execution and replenishment time \emph{is} the rule that determines temporal isolation, and must be proven correct independently of any particular periodic task set, in the same way the original SS proof is independent of the specific RM priority assignment used. Establishing this replenishment rule, and showing that it preserves both responsiveness and the periodic schedulability guarantee, is the technical core of the DSS algorithm and the focus of the remainder of this work.
 
     \section{Mathematical Foundations}
     % TODO: Ensure this section covers all "Necessary mathematical basics"
     % such as EDF scheduling principles, task density, and utilization bounds.
-    
+
     \subsection{Necessary Mathematical Basics}
     % TODO: Add more formal basics here (e.g., Liu & Layland bounds, EDF optimality).
     A DSS is defined by two primary parameters: a capacity $C_s$ (the maximum execution budget) and a period $T_s$. The server utilization is given by $U_s = C_s / T_s$.
 
     \subsection{Formal Description of the Topic}
     % TODO: Provide a formal (mathematical) description of the DSS task model and its interaction with periodic tasks.
+
     \subsubsection{Deadline Assignment}
     In an EDF environment, the server is treated as a periodic task with a dynamic deadline. When the server transitions from an idle state to a ready state at time $t$, it is assigned an absolute deadline $d$ such that:
     \begin{equation}
@@ -119,6 +134,7 @@
 
     The replenishment rule requires $O(1)$ time to schedule a new replenishment (appending to the circular buffer) and $O(1)$ time to process a replenishment when the timer expires. Compared to the Total Bandwidth Server (TBS), which only requires a single deadline update per request, the DSS carries a slightly higher memory overhead due to the replenishment queue, but this is justified by the superior temporal isolation it provides.
 
+
     \section{Implementation Model}
     The Dynamic Sporadic Server was implemented using UPPAAL Timed Automata. To ensure compatibility with standard model checking and avoid the undecidability associated with arbitrary stopwatch stop-clocks, a discrete-time modeling approach was adopted.
 
@@ -133,7 +149,8 @@
 
     \subsection{EDF Scheduler Logic}
     The scheduler is implemented as a C-style function within the UPPAAL declaration. At each time step, it evaluates all ready tasks and assigns the CPU to the task with the smallest absolute deadline. This ensures that the dynamic priority nature of EDF is correctly captured.
-    
+
+
     \section{Application Realization}
     The DSS implementation was validated against a task set consisting of two hard periodic tasks and one DSS. Formal verification using UPPAAL's verifier confirmed that the system is deadlock-free and that all hard periodic tasks meet their deadlines even under heavy aperiodic load.
 
