@@ -170,14 +170,14 @@
 	<template>
 		<name>PeriodicTask</name>
 		<parameter>const int id</parameter>
-		<location id="id0" x="0" y="0">
-			<name x="-10" y="-30">Idle</name>
+		<location id="id0" x="8" y="102">
+			<name x="-2" y="72">Idle</name>
 		</location>
-		<location id="id1" x="150" y="0">
-			<name x="140" y="-30">Ready</name>
+		<location id="id1" x="246" y="85">
+			<name x="236" y="55">Ready</name>
 		</location>
-		<location id="id2" x="300" y="0">
-			<name x="290" y="-30">Active</name>
+		<location id="id2" x="654" y="68">
+			<name x="644" y="38">Active</name>
 		</location>
 		<init ref="id0"/>
 		<transition id="id3">
@@ -199,27 +199,27 @@
 		<transition id="id5">
 			<source ref="id1"/>
 			<target ref="id1"/>
-			<label kind="synchronisation" x="140" y="50">tick?</label>
-			<label kind="assignment" x="140" y="70">update_periodic(id)</label>
-			<nail x="130" y="50"/>
-			<nail x="170" y="50"/>
+			<label kind="synchronisation" x="236" y="135">tick?</label>
+			<label kind="assignment" x="236" y="155">update_periodic(id)</label>
+			<nail x="226" y="135"/>
+			<nail x="266" y="135"/>
 		</transition>
 		<transition id="id6">
 			<source ref="id2"/>
 			<target ref="id2"/>
-			<label kind="synchronisation" x="290" y="50">tick?</label>
-			<label kind="assignment" x="290" y="70">update_periodic(id)</label>
-			<nail x="280" y="50"/>
-			<nail x="320" y="50"/>
+			<label kind="synchronisation" x="644" y="118">tick?</label>
+			<label kind="assignment" x="644" y="138">update_periodic(id)</label>
+			<nail x="634" y="118"/>
+			<nail x="674" y="118"/>
 		</transition>
 		<transition id="id7">
 			<source ref="id0"/>
 			<target ref="id0"/>
-			<label kind="guard" x="-100" y="-20">!ready[id]</label>
-			<label kind="synchronisation" x="-100" y="0">tick?</label>
-			<label kind="assignment" x="-100" y="20">update_periodic(id)</label>
-			<nail x="-30" y="-50"/>
-			<nail x="-70" y="-50"/>
+			<label kind="guard" x="-92" y="82">!ready[id]</label>
+			<label kind="synchronisation" x="-92" y="102">tick?</label>
+			<label kind="assignment" x="-92" y="122">update_periodic(id)</label>
+			<nail x="-22" y="52"/>
+			<nail x="-62" y="52"/>
 		</transition>
 		<transition id="id8">
 			<source ref="id1"/>
@@ -231,17 +231,17 @@
 			<source ref="id2"/>
 			<target ref="id1"/>
 			<label kind="guard" x="180" y="20">cpu_task != id &amp;&amp; ready[id]</label>
-			<label kind="synchronisation" x="180" y="40">reschedule?</label>
+			<label kind="synchronisation" x="178" y="25">reschedule?</label>
 			<nail x="250" y="30"/>
 			<nail x="200" y="30"/>
 		</transition>
 		<transition id="id10">
 			<source ref="id2"/>
 			<target ref="id0"/>
-			<label kind="guard" x="150" y="80">!ready[id]</label>
-			<label kind="synchronisation" x="150" y="100">reschedule?</label>
-			<nail x="280" y="80"/>
-			<nail x="20" y="80"/>
+			<label kind="guard" x="252" y="221">!ready[id]</label>
+			<label kind="synchronisation" x="252" y="241">reschedule?</label>
+			<nail x="382" y="221"/>
+			<nail x="122" y="221"/>
 		</transition>
 		<transition id="id11">
 			<source ref="id1"/>
@@ -271,134 +271,136 @@
 	<template>
 		<name>DSS</name>
 		<parameter>const int id</parameter>
-		<location id="id14" x="0" y="0">
-			<name x="-10" y="-30">Idle</name>
+		<location id="id14" x="-127" y="-8">
+			<name x="-137" y="-38">Idle</name>
 		</location>
 		<location id="id15" x="150" y="0">
 			<name x="140" y="-30">Ready</name>
 		</location>
-		<location id="id16" x="300" y="0">
-			<name x="290" y="-30">Active</name>
+		<location id="id16" x="467" y="0">
+			<name x="484" y="-8">Active</name>
 		</location>
 		<init ref="id14"/>
 		<transition id="id17">
 			<source ref="id14"/>
 			<target ref="id15"/>
-			<label kind="guard" x="50" y="-60">rem_req_c &lt; 20</label>
-			<label kind="synchronisation" x="50" y="-40">request?</label>
-			<label kind="assignment" x="50" y="-20">rem_req_c += 5, rel_d[id]=T[id]</label>
+			<label kind="guard" x="0" y="-127">rem_req_c &lt; 20</label>
+			<label kind="synchronisation" x="0" y="-110">request?</label>
+			<label kind="assignment" x="-76" y="-93">rem_req_c += 5, rel_d[id]=T[id]</label>
+			<nail x="-42" y="-68"/>
+			<nail x="85" y="-68"/>
 		</transition>
 		<transition id="id18">
 			<source ref="id15"/>
 			<target ref="id15"/>
-			<label kind="guard" x="140" y="-100">rem_req_c &lt; 20</label>
-			<label kind="synchronisation" x="140" y="-80">request?</label>
-			<label kind="assignment" x="140" y="-60">rem_req_c += 5</label>
-			<nail x="130" y="-50"/>
-			<nail x="170" y="-50"/>
+			<label kind="guard" x="208" y="-135">rem_req_c &lt; 20</label>
+			<label kind="synchronisation" x="208" y="-115">request?</label>
+			<label kind="assignment" x="246" y="-93">rem_req_c += 5</label>
+			<nail x="198" y="-85"/>
+			<nail x="238" y="-85"/>
 		</transition>
 		<transition id="id19">
 			<source ref="id16"/>
 			<target ref="id16"/>
-			<label kind="guard" x="290" y="-100">rem_req_c &lt; 20</label>
-			<label kind="synchronisation" x="290" y="-80">request?</label>
-			<label kind="assignment" x="290" y="-60">rem_req_c += 5</label>
-			<nail x="280" y="-50"/>
-			<nail x="320" y="-50"/>
+			<label kind="guard" x="544" y="-127">rem_req_c &lt; 20</label>
+			<label kind="synchronisation" x="552" y="-102">request?</label>
+			<label kind="assignment" x="544" y="-85">rem_req_c += 5</label>
+			<nail x="504" y="-76"/>
+			<nail x="544" y="-76"/>
 		</transition>
 		<transition id="id20">
 			<source ref="id14"/>
 			<target ref="id14"/>
-			<label kind="synchronisation" x="-100" y="-20">tick?</label>
-			<label kind="assignment" x="-100" y="0">update_dss(id)</label>
-			<nail x="-30" y="-50"/>
-			<nail x="-70" y="-50"/>
+			<label kind="synchronisation" x="-212" y="-85">tick?</label>
+			<label kind="assignment" x="-272" y="-110">update_dss(id)</label>
+			<nail x="-157" y="-58"/>
+			<nail x="-197" y="-58"/>
 		</transition>
 		<transition id="id21">
 			<source ref="id15"/>
 			<target ref="id15"/>
-			<label kind="synchronisation" x="120" y="50">tick?</label>
-			<label kind="assignment" x="120" y="70">update_dss(id)</label>
-			<nail x="130" y="50"/>
-			<nail x="170" y="50"/>
+			<label kind="synchronisation" x="162" y="127">tick?</label>
+			<label kind="assignment" x="162" y="147">update_dss(id)</label>
+			<nail x="172" y="127"/>
+			<nail x="212" y="127"/>
 		</transition>
 		<transition id="id22">
 			<source ref="id16"/>
 			<target ref="id16"/>
-			<label kind="synchronisation" x="290" y="50">tick?</label>
-			<label kind="assignment" x="290" y="70">update_dss(id)</label>
-			<nail x="280" y="50"/>
-			<nail x="320" y="50"/>
+			<label kind="synchronisation" x="522" y="85">tick?</label>
+			<label kind="assignment" x="522" y="105">update_dss(id)</label>
+			<nail x="512" y="85"/>
+			<nail x="552" y="85"/>
 		</transition>
 		<transition id="id23">
 			<source ref="id14"/>
 			<target ref="id16"/>
-			<label kind="guard" x="100" y="-120">rem_req_c &gt; 0 &amp;&amp; cpu_task == id</label>
-			<label kind="synchronisation" x="100" y="-100">reschedule?</label>
-			<nail x="50" y="-80"/>
-			<nail x="250" y="-80"/>
+			<label kind="guard" x="118" y="-269">rem_req_c &gt; 0 &amp;&amp; cpu_task == id</label>
+			<label kind="synchronisation" x="118" y="-249">reschedule?</label>
+			<nail x="68" y="-229"/>
+			<nail x="268" y="-229"/>
 		</transition>
 		<transition id="id24">
 			<source ref="id16"/>
 			<target ref="id14"/>
-			<label kind="guard" x="100" y="80">rem_req_c &lt;= 0</label>
-			<label kind="synchronisation" x="100" y="100">reschedule?</label>
-			<nail x="250" y="80"/>
-			<nail x="50" y="80"/>
+			<label kind="guard" x="93" y="238">rem_req_c &lt;= 0</label>
+			<label kind="synchronisation" x="93" y="255">reschedule?</label>
+			<nail x="348" y="280"/>
+			<nail x="-59" y="280"/>
 		</transition>
 		<transition id="id25">
 			<source ref="id14"/>
 			<target ref="id15"/>
-			<label kind="guard" x="20" y="20">rem_req_c &gt; 0 &amp;&amp; cpu_task != id</label>
-			<label kind="synchronisation" x="20" y="40">reschedule?</label>
-			<nail x="40" y="30"/>
-			<nail x="110" y="30"/>
+			<label kind="guard" x="-110" y="42">rem_req_c &gt; 0 &amp;&amp; cpu_task != id</label>
+			<label kind="synchronisation" x="-76" y="25">reschedule?</label>
+			<nail x="-70" y="42"/>
+			<nail x="0" y="42"/>
 		</transition>
 		<transition id="id26">
 			<source ref="id15"/>
 			<target ref="id14"/>
-			<label kind="guard" x="20" y="-60">rem_req_c &lt;= 0</label>
-			<label kind="synchronisation" x="20" y="-40">reschedule?</label>
-			<nail x="110" y="-30"/>
-			<nail x="40" y="-30"/>
+			<label kind="guard" x="-45" y="-38">rem_req_c &lt;= 0</label>
+			<label kind="synchronisation" x="-45" y="-18">reschedule?</label>
+			<nail x="45" y="-8"/>
+			<nail x="-25" y="-8"/>
 		</transition>
 		<transition id="id27">
 			<source ref="id15"/>
 			<target ref="id16"/>
-			<label kind="guard" x="180" y="-40">cpu_task == id</label>
-			<label kind="synchronisation" x="180" y="-20">reschedule?</label>
+			<label kind="guard" x="246" y="-59">cpu_task == id</label>
+			<label kind="synchronisation" x="246" y="-39">reschedule?</label>
 		</transition>
 		<transition id="id28">
 			<source ref="id16"/>
 			<target ref="id15"/>
-			<label kind="guard" x="180" y="20">cpu_task != id &amp;&amp; rem_req_c &gt; 0</label>
-			<label kind="synchronisation" x="180" y="40">reschedule?</label>
-			<nail x="260" y="30"/>
-			<nail x="190" y="30"/>
+			<label kind="guard" x="187" y="51">cpu_task != id &amp;&amp; rem_req_c &gt; 0</label>
+			<label kind="synchronisation" x="212" y="34">reschedule?</label>
+			<nail x="263" y="42"/>
+			<nail x="193" y="42"/>
 		</transition>
 		<transition id="id29">
 			<source ref="id14"/>
 			<target ref="id14"/>
-			<label kind="guard" x="-120" y="40">rem_req_c &lt;= 0</label>
-			<label kind="synchronisation" x="-120" y="60">reschedule?</label>
-			<nail x="-30" y="50"/>
-			<nail x="30" y="50"/>
+			<label kind="guard" x="-246" y="102">rem_req_c &lt;= 0</label>
+			<label kind="synchronisation" x="-238" y="119">reschedule?</label>
+			<nail x="-187" y="102"/>
+			<nail x="-127" y="102"/>
 		</transition>
 		<transition id="id30">
 			<source ref="id15"/>
 			<target ref="id15"/>
-			<label kind="guard" x="120" y="90">rem_req_c &gt; 0 &amp;&amp; cpu_task != id</label>
-			<label kind="synchronisation" x="120" y="110">reschedule?</label>
-			<nail x="130" y="90"/>
-			<nail x="170" y="90"/>
+			<label kind="guard" x="-25" y="178">rem_req_c &gt; 0 &amp;&amp; cpu_task != id</label>
+			<label kind="synchronisation" x="-25" y="198">reschedule?</label>
+			<nail x="-15" y="178"/>
+			<nail x="25" y="178"/>
 		</transition>
 		<transition id="id31">
 			<source ref="id16"/>
 			<target ref="id16"/>
-			<label kind="guard" x="280" y="90">rem_req_c &gt; 0 &amp;&amp; cpu_task == id</label>
-			<label kind="synchronisation" x="280" y="110">reschedule?</label>
-			<nail x="280" y="90"/>
-			<nail x="320" y="90"/>
+			<label kind="guard" x="419" y="178">rem_req_c &gt; 0 &amp;&amp; cpu_task == id</label>
+			<label kind="synchronisation" x="419" y="198">reschedule?</label>
+			<nail x="419" y="178"/>
+			<nail x="459" y="178"/>
 		</transition>
 	</template>
 	<template>
