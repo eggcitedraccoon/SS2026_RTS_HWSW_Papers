@@ -13,17 +13,20 @@ class EDFScheduler:
         self.deadline_misses = 0
         self.execution_trace = []
         self.budget_trace = []
+        self.released_jobs: List[Job] = []
         
     def step(self, current_time: int, new_aperiodic_request: Optional[AperiodicRequest]):
         # 1. Release periodic jobs
         for task in self.periodic_tasks:
             if current_time >= task.next_release_time:
-                self.ready_jobs.append(task.release_job(current_time))
+                job = task.release_job(current_time)
+                self.ready_jobs.append(job)
+                self.released_jobs.append(job)
         
         # 2. Process new aperiodic arrivals
         if new_aperiodic_request:
             if self.dss:
-                self.dss.add_request(new_aperiodic_request)
+                self.dss.add_request(new_aperiodic_request, current_time)
             else:
                 self.aperiodic_requests.append(new_aperiodic_request)
         
@@ -75,13 +78,15 @@ class EDFScheduler:
                 self.completed_jobs.append(job)
                 self.ready_jobs.remove(job)
         elif selected_type == 'DSS':
-            self.execution_trace.append("DSS")
-            self.dss.execute(current_time)
-            # Aperiodic requests are managed inside DSS
+            req_name = self.dss.execute(current_time)
+            if req_name:
+                self.execution_trace.append(f"DSS:{req_name}")
+            else:
+                self.execution_trace.append("IDLE") # Should not happen if entities selected DSS
         elif selected_type == 'APERIODIC':
             req = entity
             req.remaining_time -= 1
-            self.execution_trace.append("APERIODIC")
+            self.execution_trace.append(f"APERIODIC:{req.name}")
             if req.remaining_time == 0:
                 req.completion_time = current_time + 1
                 req.response_time = req.completion_time - req.arrival_time

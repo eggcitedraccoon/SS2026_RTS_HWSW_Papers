@@ -32,9 +32,11 @@ class PeriodicTask:
 
 @dataclass
 class AperiodicRequest:
+    name: str
     arrival_time: int
     execution_time: int
     remaining_time: int
     completion_time: Optional[int] = None
     response_time: Optional[int] = None
     waiting_time: Optional[int] = None
+    reserved_budget: int = 0

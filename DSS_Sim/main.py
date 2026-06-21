@@ -1,12 +1,13 @@
 import os
 import random
+import argparse
 import numpy as np
 from config import SimulationConfig
 from tasks import PeriodicTask, AperiodicRequest
 from dss import DynamicSporadicServer
 from scheduler import EDFScheduler
 from metrics import collect_metrics, print_summary, export_to_csv
-from visualization import plot_gantt, plot_budget, plot_response_times, plot_response_histogram, plot_gantt_plotly
+from visualization import plot_gantt, plot_budget, plot_response_times, plot_response_histogram
 
 def run_simulation(config: SimulationConfig, use_dss: bool):
     # Set seed for reproducibility
@@ -27,10 +28,12 @@ def run_simulation(config: SimulationConfig, use_dss: bool):
     
     # Generate all aperiodic requests beforehand to ensure they are identical for both modes
     all_aperiodic_requests = []
+    aperiodic_counter = 1
     for t in range(config.duration):
         if random.random() < config.aperiodic_arrival_prob:
             exec_time = random.randint(config.aperiodic_exec_range[0], config.aperiodic_exec_range[1])
-            all_aperiodic_requests.append(AperiodicRequest(t, exec_time, exec_time))
+            all_aperiodic_requests.append(AperiodicRequest(f"A{aperiodic_counter}", t, exec_time, exec_time))
+            aperiodic_counter += 1
     
     # Simulation loop
     aperiodic_idx = 0
@@ -70,6 +73,10 @@ def run_simulation(config: SimulationConfig, use_dss: bool):
     return results
 
 def main():
+    parser = argparse.ArgumentParser(description="EDF Simulator with Dynamic Sporadic Server")
+    parser.add_argument("--only-rt", action="store_true", help="Only generate response time statistics and plots")
+    args = parser.parse_args()
+
     config = SimulationConfig()
     results_dir = "results"
     if not os.path.exists(results_dir):
@@ -83,18 +90,16 @@ def main():
     
     # Visualization
     print("Generating visualizations...")
-    plot_gantt(res_a["scheduler"].execution_trace, config.duration, 
-               "Gantt Chart - Mode A (No DSS)", os.path.join(results_dir, "gantt_mode_a.png"))
-    plot_gantt(res_b["scheduler"].execution_trace, config.duration, 
-               "Gantt Chart - Mode B (With DSS)", os.path.join(results_dir, "gantt_mode_b.png"))
-    
-    plot_gantt_plotly(res_a["scheduler"].execution_trace, config.duration, 
-                      "Interactive Gantt - Mode A", os.path.join(results_dir, "gantt_a_interactive.html"))
-    plot_gantt_plotly(res_b["scheduler"].execution_trace, config.duration, 
-                      "Interactive Gantt - Mode B", os.path.join(results_dir, "gantt_b_interactive.html"))
-    
-    plot_budget(res_b["scheduler"].budget_trace, config.duration,
-                "DSS Budget Over Time", os.path.join(results_dir, "dss_budget.png"))
+    if not args.only_rt:
+        plot_gantt(res_a["scheduler"].execution_trace, config.duration, 
+                   "Gantt Chart - Mode A (No DSS)", os.path.join(results_dir, "gantt_mode_a.png"),
+                   res_a["scheduler"].released_jobs)
+        plot_gantt(res_b["scheduler"].execution_trace, config.duration, 
+                   "Gantt Chart - Mode B (With DSS)", os.path.join(results_dir, "gantt_mode_b.png"),
+                   res_b["scheduler"].released_jobs)
+        
+        plot_budget(res_b["scheduler"].budget_trace, config.duration,
+                    "DSS Budget Over Time", os.path.join(results_dir, "dss_budget.png"))
     
     plot_response_times(res_a["aperiodic_requests"], "Aperiodic Response Times - Mode A", 
                         os.path.join(results_dir, "response_times_a.png"))

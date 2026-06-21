@@ -1,62 +1,69 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import plotly.express as px
-import plotly.io as pio
 import os
 from typing import List, Dict, Any
 
-def plot_gantt_plotly(execution_trace: List[str], duration: int, title: str, filename: str):
-    df_list = []
-    if not execution_trace:
-        return
-        
-    start_time = 0
-    current_task = execution_trace[0]
-    
-    for t in range(1, len(execution_trace)):
-        if execution_trace[t] != current_task:
-            if current_task != "IDLE":
-                df_list.append(dict(Task=current_task, Start=start_time, Finish=t))
-            start_time = t
-            current_task = execution_trace[t]
-    
-    # Last task
-    if current_task != "IDLE":
-        df_list.append(dict(Task=current_task, Start=start_time, Finish=len(execution_trace)))
-        
-    if not df_list:
-        return
-        
-    df = pd.DataFrame(df_list)
-    # Convert ticks to some pseudo-dates because plotly express timeline expects dates
-    # or use bar chart
-    fig = px.timeline(df, x_start="Start", x_end="Finish", y="Task", color="Task", title=title)
-    fig.update_yaxes(autorange="reversed")
-    fig.layout.xaxis.type = 'linear'
-    # Set tick format
-    for i in range(len(fig.data)):
-        fig.data[i].x = fig.data[i].x
-        
-    fig.write_html(filename)
-
-def plot_gantt(execution_trace: List[str], duration: int, title: str, filename: str):
+def plot_gantt(execution_trace: List[str], duration: int, title: str, filename: str, released_jobs: List[Any] = None):
     plt.figure(figsize=(15, 6))
-    
-    unique_tasks = sorted(list(set(execution_trace) - {"IDLE"}))
-    colors = plt.cm.tab10(np.linspace(0, 1, len(unique_tasks)))
-    color_map = {task: colors[i] for i, task in enumerate(unique_tasks)}
+
+    # Process trace to separate row name from task instance name
+    processed_trace = []
+    for entry in execution_trace:
+        if entry == "IDLE":
+            processed_trace.append(("IDLE", "IDLE"))
+        elif ":" in entry:
+            row, instance = entry.split(":")
+            processed_trace.append((row, instance))
+        else:
+            processed_trace.append((entry, entry))
+
+    present_rows = set(r for r, _ in processed_trace if r != "IDLE")
+    unique_instances = sorted(list(set(i for r, i in processed_trace if r != "IDLE")))
+
+    # Row order (bottom -> top): periodic tasks ascending (P1, P2, P3), then DSS/APERIODIC on top
+    periodic_rows = sorted(r for r in present_rows if r not in ("DSS", "APERIODIC"))
+    server_rows = [r for r in ("DSS", "APERIODIC") if r in present_rows]
+    ordered_rows = periodic_rows + server_rows
+    row_to_y = {row: i for i, row in enumerate(ordered_rows)}
+
+    # Color map for instances
+    colors = plt.cm.tab20(np.linspace(0, 1, len(unique_instances)))
+    color_map = {inst: colors[i] for i, inst in enumerate(unique_instances)}
     color_map["IDLE"] = "white"
-    
-    for t in range(len(execution_trace)):
-        task = execution_trace[t]
-        if task != "IDLE":
-            plt.barh(task, 1, left=t, color=color_map[task], edgecolor='black', alpha=0.8)
-            
+
+    for t, (row, inst) in enumerate(processed_trace):
+        if row != "IDLE":
+            hatch = None
+            if row in ["DSS", "APERIODIC"]:
+                hatches = ['', '//', '\\\\', 'xx', '++', 'oo', '..', '**', '||', '--']
+                aperiodic_instances = [i for i in unique_instances if i.startswith('A')]
+                if inst in aperiodic_instances:
+                    hatch = hatches[aperiodic_instances.index(inst) % len(hatches)]
+
+            plt.barh(row_to_y[row], 1, left=t, color=color_map[inst], edgecolor='black', alpha=0.8, hatch=hatch)
+
+    # Plot deadlines
+    if released_jobs:
+        for job in released_jobs:
+            if job.task_name in row_to_y:
+                y = row_to_y[job.task_name]
+                plt.vlines(job.absolute_deadline,
+                           y - 0.4,
+                           y + 0.4,
+                           colors='red', linestyles='solid', linewidth=2, label='Deadline' if 'Deadline' not in plt.gca().get_legend_handles_labels()[1] else "")
+
+    plt.yticks(list(row_to_y.values()), list(row_to_y.keys()))
     plt.xlabel('Time (ms)')
     plt.ylabel('Task')
     plt.title(title)
     plt.grid(axis='x', linestyle='--', alpha=0.7)
+
+    # Add legend if we have deadlines
+    handles, labels = plt.gca().get_legend_handles_labels()
+    if labels:
+        plt.legend(handles, labels, loc='upper right')
+
     plt.tight_layout()
     plt.savefig(filename)
     plt.close()
