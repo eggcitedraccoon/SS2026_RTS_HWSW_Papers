@@ -170,70 +170,70 @@
 	<template>
 		<name>PeriodicTask</name>
 		<parameter>const int id</parameter>
-		<location id="id0" x="8" y="102">
-			<name x="-2" y="72">Idle</name>
+		<location id="id0" x="-34" y="85">
+			<name x="-44" y="55">Idle</name>
 		</location>
 		<location id="id1" x="246" y="85">
 			<name x="236" y="55">Ready</name>
 		</location>
-		<location id="id2" x="654" y="68">
-			<name x="644" y="38">Active</name>
+		<location id="id2" x="527" y="85">
+			<name x="517" y="55">Active</name>
 		</location>
 		<init ref="id0"/>
 		<transition id="id3">
 			<source ref="id0"/>
 			<target ref="id1"/>
-			<label kind="guard" x="50" y="-40">ready[id] &amp;&amp; cpu_task != id</label>
-			<label kind="synchronisation" x="50" y="-20">tick?</label>
-			<label kind="assignment" x="50" y="0">update_periodic(id)</label>
+			<label kind="guard" x="0" y="59">ready[id] &amp;&amp; cpu_task != id</label>
+			<label kind="synchronisation" x="8" y="85">tick?</label>
+			<label kind="assignment" x="59" y="85">update_periodic(id)</label>
 		</transition>
 		<transition id="id4">
 			<source ref="id0"/>
 			<target ref="id2"/>
-			<label kind="guard" x="100" y="-80">ready[id] &amp;&amp; cpu_task == id</label>
-			<label kind="synchronisation" x="100" y="-60">tick?</label>
-			<label kind="assignment" x="100" y="-40">update_periodic(id)</label>
-			<nail x="50" y="-50"/>
-			<nail x="250" y="-50"/>
+			<label kind="guard" x="249" y="-157">ready[id] &amp;&amp; cpu_task == id</label>
+			<label kind="synchronisation" x="249" y="-137">tick?</label>
+			<label kind="assignment" x="249" y="-117">update_periodic(id)</label>
+			<nail x="25" y="-127"/>
+			<nail x="399" y="-127"/>
 		</transition>
 		<transition id="id5">
 			<source ref="id1"/>
 			<target ref="id1"/>
-			<label kind="synchronisation" x="236" y="135">tick?</label>
-			<label kind="assignment" x="236" y="155">update_periodic(id)</label>
-			<nail x="226" y="135"/>
-			<nail x="266" y="135"/>
+			<label kind="synchronisation" x="205" y="178">tick?</label>
+			<label kind="assignment" x="205" y="198">update_periodic(id)</label>
+			<nail x="195" y="178"/>
+			<nail x="235" y="178"/>
 		</transition>
 		<transition id="id6">
 			<source ref="id2"/>
 			<target ref="id2"/>
-			<label kind="synchronisation" x="644" y="118">tick?</label>
-			<label kind="assignment" x="644" y="138">update_periodic(id)</label>
-			<nail x="634" y="118"/>
-			<nail x="674" y="118"/>
+			<label kind="synchronisation" x="517" y="135">tick?</label>
+			<label kind="assignment" x="517" y="155">update_periodic(id)</label>
+			<nail x="507" y="135"/>
+			<nail x="547" y="135"/>
 		</transition>
 		<transition id="id7">
 			<source ref="id0"/>
 			<target ref="id0"/>
-			<label kind="guard" x="-92" y="82">!ready[id]</label>
-			<label kind="synchronisation" x="-92" y="102">tick?</label>
-			<label kind="assignment" x="-92" y="122">update_periodic(id)</label>
-			<nail x="-22" y="52"/>
-			<nail x="-62" y="52"/>
+			<label kind="guard" x="-89" y="191">!ready[id]</label>
+			<label kind="synchronisation" x="-89" y="211">tick?</label>
+			<label kind="assignment" x="-89" y="231">update_periodic(id)</label>
+			<nail x="-19" y="161"/>
+			<nail x="-59" y="161"/>
 		</transition>
 		<transition id="id8">
 			<source ref="id1"/>
 			<target ref="id2"/>
-			<label kind="guard" x="180" y="-40">cpu_task == id</label>
-			<label kind="synchronisation" x="180" y="-20">reschedule?</label>
+			<label kind="guard" x="306" y="93">cpu_task == id</label>
+			<label kind="synchronisation" x="306" y="113">reschedule?</label>
 		</transition>
 		<transition id="id9">
 			<source ref="id2"/>
 			<target ref="id1"/>
-			<label kind="guard" x="180" y="20">cpu_task != id &amp;&amp; ready[id]</label>
-			<label kind="synchronisation" x="178" y="25">reschedule?</label>
-			<nail x="250" y="30"/>
-			<nail x="200" y="30"/>
+			<label kind="guard" x="272" y="34">cpu_task != id &amp;&amp; ready[id]</label>
+			<label kind="synchronisation" x="306" y="17">reschedule?</label>
+			<nail x="382" y="59"/>
+			<nail x="332" y="59"/>
 		</transition>
 		<transition id="id10">
 			<source ref="id2"/>
@@ -246,26 +246,26 @@
 		<transition id="id11">
 			<source ref="id1"/>
 			<target ref="id0"/>
-			<label kind="guard" x="50" y="40">!ready[id]</label>
-			<label kind="synchronisation" x="50" y="60">reschedule?</label>
-			<nail x="130" y="40"/>
-			<nail x="20" y="40"/>
+			<label kind="guard" x="107" y="-42">!ready[id]</label>
+			<label kind="synchronisation" x="107" y="-22">reschedule?</label>
+			<nail x="187" y="-42"/>
+			<nail x="77" y="-42"/>
 		</transition>
 		<transition id="id12">
 			<source ref="id0"/>
 			<target ref="id1"/>
-			<label kind="guard" x="30" y="-60">ready[id] &amp;&amp; cpu_task != id</label>
-			<label kind="synchronisation" x="30" y="-45">reschedule?</label>
-			<nail x="40" y="-30"/>
-			<nail x="110" y="-30"/>
+			<label kind="guard" x="41" y="-98">ready[id] &amp;&amp; cpu_task != id</label>
+			<label kind="synchronisation" x="41" y="-83">reschedule?</label>
+			<nail x="51" y="-68"/>
+			<nail x="246" y="-68"/>
 		</transition>
 		<transition id="id13">
 			<source ref="id0"/>
 			<target ref="id2"/>
-			<label kind="guard" x="100" y="-120">ready[id] &amp;&amp; cpu_task == id</label>
-			<label kind="synchronisation" x="100" y="-105">reschedule?</label>
-			<nail x="30" y="-100"/>
-			<nail x="270" y="-100"/>
+			<label kind="guard" x="45" y="-207">ready[id] &amp;&amp; cpu_task == id</label>
+			<label kind="synchronisation" x="45" y="-192">reschedule?</label>
+			<nail x="-25" y="-187"/>
+			<nail x="527" y="-187"/>
 		</transition>
 	</template>
 	<template>
@@ -405,34 +405,34 @@
 	</template>
 	<template>
 		<name>CPU</name>
-		<location id="id32" x="0" y="0">
-			<name x="-10" y="-30">Idle</name>
+		<location id="id32" x="263" y="-187">
+			<name x="253" y="-217">Idle</name>
 		</location>
 		<location id="id33" x="263" y="0">
-			<name x="253" y="-30">Busy</name>
+			<name x="289" y="-17">Busy</name>
 		</location>
 		<init ref="id32"/>
 		<transition id="id34">
 			<source ref="id32"/>
 			<target ref="id33"/>
-			<label kind="guard" x="42" y="-30">cpu_task != -1</label>
-			<label kind="synchronisation" x="42" y="-15">reschedule?</label>
+			<label kind="guard" x="272" y="-102">cpu_task != -1</label>
+			<label kind="synchronisation" x="280" y="-85">reschedule?</label>
 		</transition>
 		<transition id="id35">
 			<source ref="id33"/>
 			<target ref="id32"/>
-			<label kind="guard" x="42" y="30">cpu_task == -1</label>
-			<label kind="synchronisation" x="42" y="45">reschedule?</label>
-			<nail x="204" y="42"/>
-			<nail x="68" y="51"/>
+			<label kind="guard" x="102" y="-119">cpu_task == -1</label>
+			<label kind="synchronisation" x="102" y="-102">reschedule?</label>
+			<nail x="195" y="0"/>
+			<nail x="195" y="-187"/>
 		</transition>
 		<transition id="id36">
 			<source ref="id32"/>
 			<target ref="id32"/>
-			<label kind="guard" x="-100" y="10">cpu_task == -1</label>
-			<label kind="synchronisation" x="-100" y="30">reschedule?</label>
-			<nail x="-30" y="40"/>
-			<nail x="30" y="40"/>
+			<label kind="guard" x="323" y="-195">cpu_task == -1</label>
+			<label kind="synchronisation" x="297" y="-170">reschedule?</label>
+			<nail x="314" y="-212"/>
+			<nail x="314" y="-170"/>
 		</transition>
 		<transition id="id37">
 			<source ref="id33"/>
@@ -446,52 +446,49 @@
 	<template>
 		<name>Ticker</name>
 		<declaration>clock c;</declaration>
-		<location id="id38" x="0" y="0">
-			<name x="-10" y="-30">Wait</name>
-			<label kind="invariant" x="-10" y="15">c &lt;= 1</label>
+		<location id="id38" x="170" y="34">
+			<name x="160" y="4">Wait</name>
+			<label kind="invariant" x="160" y="49">c &lt;= 1</label>
 		</location>
-		<location id="id39" x="150" y="0">
-			<name x="140" y="-30">Reschedule</name>
+		<location id="id39" x="178" y="-93">
+			<name x="168" y="-123">Reschedule</name>
 			<urgent/>
 		</location>
-		<location id="id40" x="0" y="-100">
-			<name x="-10" y="-130">Start</name>
-			<urgent/>
-		</location>
-		<init ref="id40"/>
-		<transition id="id41">
-			<source ref="id40"/>
-			<target ref="id39"/>
-			<label kind="assignment" x="10" y="-80">select_task()</label>
-		</transition>
-		<transition id="id42">
+		<init ref="id38"/>
+		<transition id="id40">
 			<source ref="id38"/>
 			<target ref="id39"/>
-			<label kind="guard" x="50" y="-40">c == 1</label>
-			<label kind="synchronisation" x="50" y="-20">tick!</label>
-			<label kind="assignment" x="50" y="0">c=0, select_task()</label>
+			<label kind="guard" x="110" y="-51">c == 1</label>
+			<label kind="synchronisation" x="110" y="-34">tick!</label>
+			<label kind="assignment" x="68" y="-17">c=0, select_task()</label>
+			<nail x="102" y="34"/>
+			<nail x="102" y="-93"/>
 		</transition>
-		<transition id="id43">
+		<transition id="id41">
 			<source ref="id39"/>
 			<target ref="id38"/>
-			<label kind="synchronisation" x="50" y="20">reschedule!</label>
+			<label kind="synchronisation" x="280" y="-34">reschedule!</label>
+			<nail x="272" y="-68"/>
+			<nail x="272" y="8"/>
 		</transition>
 	</template>
 	<template>
 		<name>Source</name>
 		<declaration>clock p;</declaration>
-		<location id="id44" x="0" y="0">
+		<location id="id42" x="0" y="0">
 			<label kind="invariant" x="-10" y="15">p &lt;= 50</label>
 		</location>
-		<init ref="id44"/>
-		<transition id="id45">
-			<source ref="id44"/>
-			<target ref="id44"/>
-			<label kind="guard" x="-60" y="-30">p &gt;= 10</label>
-			<label kind="synchronisation" x="-60" y="-15">request!</label>
-			<label kind="assignment" x="-60" y="0">p=0</label>
-			<nail x="-40" y="-40"/>
-			<nail x="40" y="-40"/>
+		<init ref="id42"/>
+		<transition id="id43">
+			<source ref="id42"/>
+			<target ref="id42"/>
+			<label kind="guard" x="-42" y="-119">p &gt;= 10</label>
+			<label kind="synchronisation" x="-42" y="-93">request!</label>
+			<label kind="assignment" x="-25" y="-76">p=0</label>
+			<nail x="-51" y="0"/>
+			<nail x="-51" y="-93"/>
+			<nail x="34" y="-93"/>
+			<nail x="34" y="0"/>
 		</transition>
 	</template>
 	<system>// Process instantiations
@@ -517,6 +514,8 @@
 		<query>
 			<formula>A[] (rem_req_c &gt; 0 imply rel_d[DSS_ID] &gt;= -1)</formula>
 			<comment>NEW: the aperiodic request being serviced by the DSS also meets its deadline. Previously rel_d[DSS_ID] was never checked, which is how the burst-bookkeeping bug stayed hidden.</comment>
+			<result outcome="failure" type="quality" timestamp="2026-06-21 18:34:08 +0200">
+			</result>
 		</query>
 		<query>
 			<formula>E&lt;&gt; D2.Active</formula>
