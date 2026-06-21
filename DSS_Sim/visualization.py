@@ -102,14 +102,46 @@ def plot_response_times(aperiodic_requests: List[Any], title: str, filename: str
     plt.savefig(filename)
     plt.close()
 
+def _gaussian_kde(data: np.ndarray, x: np.ndarray) -> np.ndarray:
+    n = len(data)
+    std = data.std(ddof=1) if n > 1 else 0.0
+    # Silverman's rule of thumb; fall back to a small bandwidth for degenerate data
+    bw = 1.06 * std * n ** (-1 / 5) if std > 0 else 0.5
+    diff = (x[:, None] - data[None, :]) / bw
+    return np.exp(-0.5 * diff ** 2).sum(axis=1) / (n * bw * np.sqrt(2 * np.pi))
+
+
 def plot_response_histogram(aperiodic_requests_a: List[Any], aperiodic_requests_b: List[Any], filename: str):
-    resp_a = [r.response_time for r in aperiodic_requests_a if r.completion_time is not None]
-    resp_b = [r.response_time for r in aperiodic_requests_b if r.completion_time is not None]
-    
+    resp_a = np.array([r.response_time for r in aperiodic_requests_a if r.completion_time is not None], dtype=float)
+    resp_b = np.array([r.response_time for r in aperiodic_requests_b if r.completion_time is not None], dtype=float)
+
+    if len(resp_a) == 0 and len(resp_b) == 0:
+        return
+
+    all_resp = np.concatenate([resp_a, resp_b])
+    x_min = max(0.0, float(all_resp.min()) - 2.0)
+    x_max = float(all_resp.max()) + 2.0
+    x = np.linspace(x_min, x_max, 500)
+
     plt.figure(figsize=(10, 6))
-    plt.hist([resp_a, resp_b], label=['Mode A (No DSS)', 'Mode B (With DSS)'], bins=20, alpha=0.7)
+    for data, label, color in [
+        (resp_a, 'Mode A (No DSS)', 'tab:red'),
+        (resp_b, 'Mode B (With DSS)', 'tab:blue'),
+    ]:
+        if len(data) == 0:
+            continue
+        # Underlying empirical histogram (normalised so area = 1)
+        plt.hist(data, bins='auto', density=True, alpha=0.2, color=color)
+        if len(data) >= 2:
+            y = _gaussian_kde(data, x)
+            plt.plot(x, y, color=color, linewidth=2, label=f'{label} (μ={data.mean():.2f} ms)')
+            plt.fill_between(x, y, alpha=0.25, color=color)
+        else:
+            plt.axvline(data[0], color=color, linewidth=2, label=f'{label} (n=1, x={data[0]:.0f} ms)')
+        plt.axvline(data.mean(), color=color, linestyle='--', alpha=0.8)
+
     plt.xlabel('Response Time (ms)')
-    plt.ylabel('Frequency')
+    plt.ylabel('Probability Density')
     plt.title('Aperiodic Response Time Distribution Comparison')
     plt.legend()
     plt.grid(True, linestyle='--', alpha=0.7)
