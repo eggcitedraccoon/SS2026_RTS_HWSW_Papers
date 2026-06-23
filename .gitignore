@@ -1,4 +1,4 @@
-/.idea/
+/**/.idea/
 /**/.venv/
 /RTS/*
 /HWSW/*
@@ -9,3 +9,6 @@
 !/HWSW/**/*.tex
 !/HWSW/**/*.bib
 !/HWSW/*.pdf
+
+HLS_with_SAS_sim/cmake-build-debug/
+HLS_with_SAS_sim/main
