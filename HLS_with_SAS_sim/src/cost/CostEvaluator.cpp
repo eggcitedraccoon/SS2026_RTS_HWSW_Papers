@@ -5,6 +5,7 @@
 
 #include "CostEvaluator.h"
 #include <algorithm>
+#include <set>
 
 /**
  * @brief Calculates cost based on latency, area, and constraint violations.
@@ -13,7 +14,7 @@
  * penalties for any dependency or resource overlap violations to ensure 
  * the SA optimizer favors valid schedules.
  */
-double CostEvaluator::evaluate(const DFG& dfg, ScheduleState& state, double alpha, double beta) {
+double CostEvaluator::evaluate(const DFG& dfg, ScheduleState& state, double alpha, double beta, double latencyNorm, double areaNorm) {
     int maxLatency = 0;
     for (auto const& [opId, startCycle] : state.operationCycles) {
         auto op = dfg.getOperation(opId);
@@ -22,13 +23,21 @@ double CostEvaluator::evaluate(const DFG& dfg, ScheduleState& state, double alph
     }
     state.latency = maxLatency;
 
+    std::set<int> usedResourceIds;
+    for (auto const& [opId, resId] : state.resourceBindings) {
+        usedResourceIds.insert(resId);
+    }
+
     int totalArea = 0;
-    for (auto const& [resId, res] : state.resources) {
-        totalArea += res.areaCost;
+    for (int resId : usedResourceIds) {
+        if (state.resources.count(resId)) {
+            totalArea += state.resources.at(resId).areaCost;
+        }
     }
     state.area = totalArea;
 
-    state.cost = alpha * state.latency + beta * state.area;
+    state.cost = alpha * (static_cast<double>(state.latency) / latencyNorm) + 
+                 beta * (static_cast<double>(state.area) / areaNorm);
 
     // Check for resource overlaps or dependency violations and add penalty if any
     // This is a safety measure.

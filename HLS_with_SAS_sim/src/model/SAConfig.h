@@ -17,6 +17,8 @@ struct SAConfig {
     int iterationsPerTemp = 100;        ///< Number of neighbor moves to try at each temperature step
     double alpha = 1.0;                 ///< Weight for latency in the cost function
     double beta = 0.5;                  ///< Weight for area in the cost function
+    double latencyNorm = 1.0;           ///< Normalization factor for latency
+    double areaNorm = 1.0;              ///< Normalization factor for area
     int runs = 30;                      ///< Number of independent SA runs for statistical analysis
     int seed = 42;                      ///< Random seed for reproducibility
 };

@@ -22,9 +22,11 @@ public:
      * @param state The state to be evaluated.
      * @param alpha Weight for latency.
      * @param beta Weight for area.
+     * @param latencyNorm Normalization factor for latency.
+     * @param areaNorm Normalization factor for area.
      * @return The calculated cost including any penalties for constraint violations.
      */
-    static double evaluate(const DFG& dfg, ScheduleState& state, double alpha, double beta);
+    static double evaluate(const DFG& dfg, ScheduleState& state, double alpha, double beta, double latencyNorm = 1.0, double areaNorm = 1.0);
 };
 
 #endif // COSTEVALUATOR_H

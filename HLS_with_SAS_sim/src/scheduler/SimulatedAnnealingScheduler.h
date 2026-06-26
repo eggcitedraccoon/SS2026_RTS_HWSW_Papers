@@ -12,6 +12,17 @@
 #include <vector>
 
 /**
+ * @struct TempStats
+ * @brief Statistics for a single temperature level.
+ */
+struct TempStats {
+    double temperature;
+    double avgCost;
+    double maxCost;
+    double minCost;
+};
+
+/**
  * @struct RunResult
  * @brief Stores the outcome of a single Simulated Annealing execution.
  */
@@ -20,7 +31,9 @@ struct RunResult {
     ScheduleState bestState;                        ///< The best solution found during the run
     double executionTimeMs;                         ///< Runtime of the synthesis in milliseconds
     std::vector<std::pair<int, double>> convergenceLog; ///< Log of (iteration, best_cost) for plotting
+    std::vector<double> bestCostLog;                ///< Best-so-far cost, sampled in sync with convergenceLog
     std::vector<double> tempsLog;                   ///< Log of temperature over iterations
+    std::vector<TempStats> tempStats;               ///< Statistics per temperature level
 };
 
 /**

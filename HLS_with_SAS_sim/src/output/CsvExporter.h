@@ -32,6 +32,13 @@ public:
     static void exportConvergenceLog(const std::string& filename, const RunResult& result, const std::vector<double>& temps);
 
     /**
+     * @brief Exports the temperature-based statistics for a run.
+     * @param filename Path to the output CSV file.
+     * @param stats Vector of TempStats.
+     */
+    static void exportTempStats(const std::string& filename, const std::vector<TempStats>& stats);
+
+    /**
      * @brief Exports a Gantt-style CSV for schedule visualization.
      * @param filename Path to the output CSV file.
      * @param dfg The Data Flow Graph.

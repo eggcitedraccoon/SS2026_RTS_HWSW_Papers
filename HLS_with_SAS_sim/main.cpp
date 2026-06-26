@@ -14,6 +14,8 @@
 #include <numeric>
 #include <cmath>
 #include <algorithm>
+#include <sys/stat.h>
+#include <fstream>
 #include "src/model/DFG.h"
 #include "src/model/SAConfig.h"
 #include "src/parser/DFGParser.h"
@@ -82,13 +84,18 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Initial scheduling (ASAP)..." << std::endl;
     ASAP::schedule(dfg, initialState);
-    double asapCost = CostEvaluator::evaluate(dfg, initialState, config.alpha, config.beta);
+    // Use initial ASAP results for normalization
+    CostEvaluator::evaluate(dfg, initialState, config.alpha, config.beta); 
+    config.latencyNorm = std::max(1.0, static_cast<double>(initialState.latency));
+    config.areaNorm = std::max(1.0, static_cast<double>(initialState.area));
+
+    double asapCost = CostEvaluator::evaluate(dfg, initialState, config.alpha, config.beta, config.latencyNorm, config.areaNorm);
     std::cout << "ASAP Cost: " << asapCost << " (Lat: " << initialState.latency << ", Area: " << initialState.area << ")\n";
 
     ScheduleState listState;
     listState.resources = initialState.resources;
     ListScheduler::schedule(dfg, listState);
-    double listCost = CostEvaluator::evaluate(dfg, listState, config.alpha, config.beta);
+    double listCost = CostEvaluator::evaluate(dfg, listState, config.alpha, config.beta, config.latencyNorm, config.areaNorm);
     std::cout << "List Scheduler Cost: " << listCost << " (Lat: " << listState.latency << ", Area: " << listState.area << ")\n";
     
     std::cout << "Starting SA Optimization (" << config.runs << " runs)..." << std::endl;
@@ -113,11 +120,24 @@ int main(int argc, char* argv[]) {
     std::cout << "Final Cost: " << bestRunIt->bestState.cost << " (Latency: " << bestRunIt->bestState.latency << ", Area: " << bestRunIt->bestState.area << ")\n";
 
     // Export results
-    CsvExporter::exportRunSummary("run_summary.csv", results);
-    CsvExporter::exportConvergenceLog("convergence.csv", *bestRunIt, bestRunIt->tempsLog);
-    CsvExporter::exportGantt("gantt.csv", dfg, bestRunIt->bestState);
+    std::string outputDir = "results";
+    #ifdef _WIN32
+        _mkdir(outputDir.c_str());
+    #else
+        mkdir(outputDir.c_str(), 0777);
+    #endif
+
+    CsvExporter::exportRunSummary(outputDir + "/run_summary.csv", results);
     
-    std::cout << "\nResults exported to run_summary.csv, convergence.csv, and gantt.csv" << std::endl;
+    for (const auto& res : results) {
+        std::string runPrefix = outputDir + "/run_" + std::to_string(res.runIndex);
+        CsvExporter::exportTempStats(runPrefix + "_temp_stats.csv", res.tempStats);
+        CsvExporter::exportConvergenceLog(runPrefix + "_convergence.csv", res, res.tempsLog);
+    }
+    
+    CsvExporter::exportGantt(outputDir + "/best_gantt.csv", dfg, bestRunIt->bestState);
+    
+    std::cout << "\nResults exported to " << outputDir << "/ directory" << std::endl;
 
     return 0;
 }

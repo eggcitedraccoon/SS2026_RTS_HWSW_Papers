@@ -22,10 +22,25 @@ void CsvExporter::exportRunSummary(const std::string& filename, const std::vecto
 void CsvExporter::exportConvergenceLog(const std::string& filename, const RunResult& result, const std::vector<double>& temps) {
     std::ofstream f(filename);
     if (!f.is_open()) return;
-    f << "iteration,temp,best_cost\n";
+    f << "iteration,temp,current_cost,best_cost\n";
     for (size_t i = 0; i < result.convergenceLog.size(); ++i) {
         double t = (i < temps.size()) ? temps[i] : 0.0;
-        f << result.convergenceLog[i].first << "," << t << "," << result.convergenceLog[i].second << "\n";
+        double bestCost = (i < result.bestCostLog.size())
+                              ? result.bestCostLog[i]
+                              : result.convergenceLog[i].second;
+        f << result.convergenceLog[i].first << ","
+          << t << ","
+          << result.convergenceLog[i].second << ","
+          << bestCost << "\n";
+    }
+}
+
+void CsvExporter::exportTempStats(const std::string& filename, const std::vector<TempStats>& stats) {
+    std::ofstream f(filename);
+    if (!f.is_open()) return;
+    f << "temperature,avg_cost,max_cost,min_cost\n";
+    for (const auto& s : stats) {
+        f << s.temperature << "," << s.avgCost << "," << s.maxCost << "," << s.minCost << "\n";
     }
 }
 
