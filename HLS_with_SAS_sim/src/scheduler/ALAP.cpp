@@ -1,8 +1,19 @@
+/**
+ * @file ALAP.cpp
+ * @brief Implementation of the ALAP scheduler.
+ */
+
 #include "ALAP.h"
 #include <map>
 #include <queue>
 #include <algorithm>
 
+/**
+ * @brief Computes an ALAP schedule.
+ * 
+ * Works backward from the maxLatency to assign the latest possible start 
+ * time for each operation while respecting dependencies.
+ */
 bool ALAP::schedule(const DFG& dfg, ScheduleState& state, int maxLatency) {
     std::map<int, int> outDegree;
     std::queue<int> readyNodes;

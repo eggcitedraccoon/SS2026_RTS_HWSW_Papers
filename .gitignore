@@ -1,5 +1,7 @@
 /**/.idea/
 /**/.venv/
+/**/.junie/
+/HLS_with_SAS_sim/docs/
 /RTS/*
 /HWSW/*
 !/RTS/**/*.tex
@@ -11,4 +13,6 @@
 !/HWSW/*.pdf
 
 HLS_with_SAS_sim/cmake-build-debug/
+HLS_with_SAS_sim/cmake-build-release/
+HLS_with_SAS_sim/build/
 HLS_with_SAS_sim/main

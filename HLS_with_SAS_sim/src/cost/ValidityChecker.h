@@ -1,3 +1,8 @@
+/**
+ * @file ValidityChecker.h
+ * @brief Utility for verifying that a schedule satisfies all constraints.
+ */
+
 #ifndef VALIDITYCHECKER_H
 #define VALIDITYCHECKER_H
 
@@ -5,8 +10,19 @@
 #include "../model/ScheduleState.h"
 #include <iostream>
 
+/**
+ * @class ValidityChecker
+ * @brief Provides a strict verification of dependency and resource constraints.
+ */
 class ValidityChecker {
 public:
+    /**
+     * @brief Checks if the given state is valid.
+     * @param dfg The Data Flow Graph.
+     * @param state The state to check.
+     * @param verbose If true, prints details about violations to stdout.
+     * @return true if valid, false otherwise.
+     */
     static bool check(const DFG& dfg, const ScheduleState& state, bool verbose = false) {
         bool valid = true;
 

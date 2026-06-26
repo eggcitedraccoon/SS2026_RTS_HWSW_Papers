@@ -1,3 +1,12 @@
+/**
+ * @file main.cpp
+ * @brief Entry point for the HLS with SAS Simulator.
+ * 
+ * This program reads a DFG and a configuration file, performs initial 
+ * scheduling (ASAP and List), and then runs multiple iterations of 
+ * Simulated Annealing to optimize for area and latency.
+ */
+
 #include <iostream>
 #include <vector>
 #include <string>
@@ -5,19 +14,23 @@
 #include <numeric>
 #include <cmath>
 #include <algorithm>
-#include "model/DFG.h"
-#include "model/SAConfig.h"
-#include "parser/DFGParser.h"
-#include "parser/JSONConfigParser.h"
-#include "scheduler/ASAP.h"
-#include "scheduler/ALAP.h"
-#include "scheduler/ListScheduler.h"
-#include "cost/CostEvaluator.h"
-#include "cost/ValidityChecker.h"
-#include "scheduler/SimulatedAnnealingScheduler.h"
-#include "output/CsvExporter.h"
-#include "output/SchedulePrinter.h"
+#include "src/model/DFG.h"
+#include "src/model/SAConfig.h"
+#include "src/parser/DFGParser.h"
+#include "src/parser/JSONConfigParser.h"
+#include "src/scheduler/ASAP.h"
+#include "src/scheduler/ALAP.h"
+#include "src/scheduler/ListScheduler.h"
+#include "src/cost/CostEvaluator.h"
+#include "src/cost/ValidityChecker.h"
+#include "src/scheduler/SimulatedAnnealingScheduler.h"
+#include "src/output/CsvExporter.h"
+#include "src/output/SchedulePrinter.h"
 
+/**
+ * @brief Calculates and prints statistics for multiple SA runs.
+ * @param results A vector of results from independent runs.
+ */
 void printStatistics(const std::vector<RunResult>& results) {
     if (results.empty()) return;
     

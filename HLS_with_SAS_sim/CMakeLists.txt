@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 project(HLS_with_SAS_sim)
 
 set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 include(FetchContent)
 FetchContent_Declare(

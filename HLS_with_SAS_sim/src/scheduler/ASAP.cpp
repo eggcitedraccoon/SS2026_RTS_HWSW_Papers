@@ -1,8 +1,20 @@
+/**
+ * @file ASAP.cpp
+ * @brief Implementation of the ASAP scheduler.
+ */
+
 #include "ASAP.h"
 #include <queue>
 #include <algorithm>
 #include <map>
 
+/**
+ * @brief Computes an ASAP schedule.
+ * 
+ * This implementation also performs a greedy resource binding to provide 
+ * a complete initial solution for the SA engine. It ensures dependencies 
+ * are respected and attempts to minimize resource overlaps.
+ */
 bool ASAP::schedule(const DFG& dfg, ScheduleState& state) {
     std::map<int, int> inDegree;
     std::queue<int> readyNodes;

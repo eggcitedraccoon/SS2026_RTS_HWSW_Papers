@@ -1,7 +1,15 @@
+/**
+ * @file CsvExporter.cpp
+ * @brief Implementation of the CsvExporter class.
+ */
+
 #include "CsvExporter.h"
 #include <fstream>
 #include <iostream>
 
+/**
+ * @brief Writes summary statistics for multiple runs to a CSV file.
+ */
 void CsvExporter::exportRunSummary(const std::string& filename, const std::vector<RunResult>& results) {
     std::ofstream f(filename);
     if (!f.is_open()) return;

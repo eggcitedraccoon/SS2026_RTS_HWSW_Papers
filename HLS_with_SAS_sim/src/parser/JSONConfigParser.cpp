@@ -1,8 +1,19 @@
+/**
+ * @file JSONConfigParser.cpp
+ * @brief Implementation of the JSONConfigParser class.
+ */
+
 #include "JSONConfigParser.h"
 #include <iostream>
 
 using json = nlohmann::json;
 
+/**
+ * @brief Parses the JSON configuration and sets up the initial environment.
+ * 
+ * Extracts SA parameters (alpha, beta, cooling rate, etc.) and populates the 
+ * initial resource pool and operation type metadata (latency, area).
+ */
 bool JSONConfigParser::parseConfig(const std::string& filename, SAConfig& config, DFG& dfg, ScheduleState& initialState) {
     std::ifstream f(filename);
     if (!f.is_open()) {

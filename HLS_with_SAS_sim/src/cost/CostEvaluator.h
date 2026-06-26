@@ -1,3 +1,8 @@
+/**
+ * @file CostEvaluator.h
+ * @brief Provides functionality to calculate the cost of a candidate solution.
+ */
+
 #ifndef COSTEVALUATOR_H
 #define COSTEVALUATOR_H
 
@@ -5,8 +10,20 @@
 #include "../model/ScheduleState.h"
 #include "../model/SAConfig.h"
 
+/**
+ * @class CostEvaluator
+ * @brief Static class for evaluating the cost function (alpha * latency + beta * area).
+ */
 class CostEvaluator {
 public:
+    /**
+     * @brief Evaluates the cost of the given schedule state.
+     * @param dfg The Data Flow Graph.
+     * @param state The state to be evaluated.
+     * @param alpha Weight for latency.
+     * @param beta Weight for area.
+     * @return The calculated cost including any penalties for constraint violations.
+     */
     static double evaluate(const DFG& dfg, ScheduleState& state, double alpha, double beta);
 };
 

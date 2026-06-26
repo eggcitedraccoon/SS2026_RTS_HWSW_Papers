@@ -1,9 +1,20 @@
+/**
+ * @file SchedulePrinter.cpp
+ * @brief Implementation of the SchedulePrinter class.
+ */
+
 #include "SchedulePrinter.h"
 #include <iostream>
 #include <map>
 #include <vector>
 #include <algorithm>
 
+/**
+ * @brief Outputs the schedule to the standard console.
+ * 
+ * Each line represents a clock cycle and lists the operations scheduled 
+ * in that cycle along with their resource bindings.
+ */
 void SchedulePrinter::print(const DFG& dfg, const ScheduleState& state) {
     std::map<int, std::vector<int>> cycleToOps;
     int maxCycle = 0;

@@ -1,3 +1,8 @@
+/**
+ * @file ListScheduler.cpp
+ * @brief Implementation of the List Scheduler.
+ */
+
 #include "ListScheduler.h"
 #include "ASAP.h"
 #include "ALAP.h"
@@ -6,6 +11,13 @@
 #include <map>
 #include <set>
 
+/**
+ * @brief Computes a schedule using the List Scheduling algorithm.
+ * 
+ * Uses operation mobility (ALAP - ASAP) as the priority metric. Operations 
+ * with lower mobility are scheduled first. It also respects the current 
+ * resource pool constraints.
+ */
 bool ListScheduler::schedule(const DFG& dfg, ScheduleState& state) {
     // 1. Calculate ASAP and ALAP to get priorities
     ScheduleState asapState;

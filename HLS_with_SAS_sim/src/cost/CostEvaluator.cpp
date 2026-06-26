@@ -1,6 +1,18 @@
+/**
+ * @file CostEvaluator.cpp
+ * @brief Implementation of the CostEvaluator class.
+ */
+
 #include "CostEvaluator.h"
 #include <algorithm>
 
+/**
+ * @brief Calculates cost based on latency, area, and constraint violations.
+ * 
+ * In addition to the standard cost formula, this method applies heavy 
+ * penalties for any dependency or resource overlap violations to ensure 
+ * the SA optimizer favors valid schedules.
+ */
 double CostEvaluator::evaluate(const DFG& dfg, ScheduleState& state, double alpha, double beta) {
     int maxLatency = 0;
     for (auto const& [opId, startCycle] : state.operationCycles) {

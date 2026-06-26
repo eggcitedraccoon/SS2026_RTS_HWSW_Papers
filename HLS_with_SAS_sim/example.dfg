@@ -1,0 +1,17 @@
+t1  = LOAD(A)
+t2  = LOAD(B)
+t3  = LOAD(C)
+t4  = LOAD(D)
+
+t5  = MUL(t1,t2)
+t6  = MUL(t3,t4)
+
+t7  = LOAD(E)
+t8  = LOAD(F)
+
+t9  = ADD(t5,t6)
+t10 = MUL(t7,t8)
+
+t11 = ADD(t9,t10)
+
+STORE(t11)

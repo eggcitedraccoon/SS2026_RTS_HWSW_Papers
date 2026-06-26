@@ -1,7 +1,15 @@
+/**
+ * @file NeighborGenerator.cpp
+ * @brief Implementation of the NeighborGenerator class.
+ */
+
 #include "NeighborGenerator.h"
 #include <algorithm>
 #include <iostream>
 
+/**
+ * @brief Randomly selects and applies one of the move types defined in AGENTS.md.
+ */
 void NeighborGenerator::generate(const DFG& dfg, ScheduleState& state) {
     std::uniform_int_distribution<int> moveDist(1, 5);
     int moveType = moveDist(gen);

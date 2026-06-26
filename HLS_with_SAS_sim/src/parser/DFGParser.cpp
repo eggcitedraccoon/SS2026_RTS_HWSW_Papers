@@ -1,9 +1,23 @@
+/**
+ * @file DFGParser.cpp
+ * @brief Implementation of the DFGParser class.
+ */
+
 #include "DFGParser.h"
 #include <fstream>
 #include <iostream>
 #include <regex>
 #include <sstream>
 
+/**
+ * @brief Parses a DFG file and populates the internal representation.
+ * 
+ * Supports two main line formats:
+ * 1. result = OP(arg1, arg2, ...)
+ * 2. OP(arg1, arg2, ...)
+ * 
+ * Comments starting with '#' are ignored.
+ */
 bool DFGParser::parseDFG(const std::string& filename, DFG& dfg) {
     std::ifstream f(filename);
     if (!f.is_open()) {

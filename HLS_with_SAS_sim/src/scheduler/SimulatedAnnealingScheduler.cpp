@@ -1,3 +1,8 @@
+/**
+ * @file SimulatedAnnealingScheduler.cpp
+ * @brief Implementation of the Simulated Annealing scheduler.
+ */
+
 #include "SimulatedAnnealingScheduler.h"
 #include "NeighborGenerator.h"
 #include "../cost/CostEvaluator.h"
@@ -5,6 +10,12 @@
 #include <cmath>
 #include <iostream>
 
+/**
+ * @brief Main SA loop.
+ * 
+ * Implements geometric cooling and the Metropolis acceptance criterion. 
+ * Measures synthesis runtime and logs convergence data.
+ */
 RunResult SimulatedAnnealingScheduler::run(const DFG& dfg, const SAConfig& config, const ScheduleState& initialState, int runIndex) {
     auto startTime = std::chrono::high_resolution_clock::now();
     

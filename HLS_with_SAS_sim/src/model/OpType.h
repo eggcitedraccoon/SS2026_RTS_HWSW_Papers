@@ -1,19 +1,33 @@
+/**
+ * @file OpType.h
+ * @brief Defines the supported operation types and utility functions for conversion.
+ */
+
 #ifndef OPTYPE_H
 #define OPTYPE_H
 
 #include <string>
 #include <map>
 
+/**
+ * @enum OpType
+ * @brief Enumeration of supported operations in the DFG.
+ */
 enum class OpType {
-    LOAD,
-    STORE,
-    ADD,
-    SUB,
-    MUL,
-    DIV,
-    UNKNOWN
+    LOAD,    ///< Memory load operation
+    STORE,   ///< Memory store operation
+    ADD,     ///< Addition operation
+    SUB,     ///< Subtraction operation
+    MUL,     ///< Multiplication operation
+    DIV,     ///< Division operation
+    UNKNOWN  ///< Fallback for unknown operations
 };
 
+/**
+ * @brief Converts a string representation of an operation type to an OpType enum.
+ * @param type The string representation (e.g., "ADD", "MUL").
+ * @return The corresponding OpType enum, or OpType::UNKNOWN if not found.
+ */
 inline OpType stringToOpType(const std::string& type) {
     static const std::map<std::string, OpType> typeMap = {
         {"LOAD", OpType::LOAD},
@@ -28,6 +42,11 @@ inline OpType stringToOpType(const std::string& type) {
     return OpType::UNKNOWN;
 }
 
+/**
+ * @brief Converts an OpType enum to its string representation.
+ * @param type The OpType enum.
+ * @return The string representation of the operation type.
+ */
 inline std::string opTypeToString(OpType type) {
     static const std::map<OpType, std::string> typeMap = {
         {OpType::LOAD, "LOAD"},
