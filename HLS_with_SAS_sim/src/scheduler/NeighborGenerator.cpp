@@ -23,6 +23,33 @@ void NeighborGenerator::generate(const DFG& dfg, ScheduleState& state) {
     }
 }
 
+void NeighborGenerator::randomize(const DFG& dfg, ScheduleState& state) {
+    if (dfg.operations.empty()) return;
+
+    std::uniform_int_distribution<int> cycleDist(0, dfg.operations.size() * 2);
+
+    for (auto const& [opId, op] : dfg.operations) {
+        // Random start cycle
+        state.operationCycles[opId] = cycleDist(gen);
+
+        // Random compatible resource binding
+        std::vector<int> compatible;
+        for (auto const& [resId, res] : state.resources) {
+            if (res.type == op->type) {
+                compatible.push_back(resId);
+            }
+        }
+        
+        if (!compatible.empty()) {
+            std::uniform_int_distribution<int> resDist(0, compatible.size() - 1);
+            state.resourceBindings[opId] = compatible[resDist(gen)];
+        }
+    }
+
+    // Repair to ensure it's valid
+    repair(dfg, state);
+}
+
 void NeighborGenerator::moveInTime(const DFG& dfg, ScheduleState& state, bool forward) {
     if (dfg.operations.empty()) return;
     std::uniform_int_distribution<int> opDist(0, dfg.operations.size() - 1);

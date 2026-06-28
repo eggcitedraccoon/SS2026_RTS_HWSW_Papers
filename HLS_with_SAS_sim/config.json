@@ -1,20 +1,20 @@
 {
   "sa": {
-    "initial_temperature": 1.0,
-    "cooling_rate": 0.995,
+    "initial_temperature": 1,
+    "cooling_rate": 0.95,
     "min_temperature": 0.005,
     "iterations_per_temp": 50,
     "runs": 10,
-    "alpha": 0.05,
-    "beta": 2.0,
+    "alpha": 0.75,
+    "beta": 0.25,
     "seed": 6324798
   },
   "resources": {
-    "LOAD":  { "count": 5, "area": 1, "latency": 1 },
-    "STORE": { "count": 3, "area": 1, "latency": 1 },
-    "ADD":   { "count": 4, "area": 1, "latency": 1 },
-    "SUB":   { "count": 3, "area": 1, "latency": 1 },
-    "MUL":   { "count": 3, "area": 3, "latency": 3 },
-    "DIV":   { "count": 2, "area": 8, "latency": 4 }
+    "LOAD":  { "count": 25, "area": 5, "latency": 1 },
+    "STORE": { "count": 25, "area": 5, "latency": 1 },
+    "ADD":   { "count": 25, "area": 5, "latency": 1 },
+    "SUB":   { "count": 25, "area": 5, "latency": 1 },
+    "MUL":   { "count": 25, "area": 15, "latency": 3 },
+    "DIV":   { "count": 25, "area": 40, "latency": 4 }
   }
 }

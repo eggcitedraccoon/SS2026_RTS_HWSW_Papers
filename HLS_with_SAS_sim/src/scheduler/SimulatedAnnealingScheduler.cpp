@@ -23,8 +23,12 @@ RunResult SimulatedAnnealingScheduler::run(const DFG& dfg, const SAConfig& confi
     ScheduleState currentState = initialState;
     NeighborGenerator generator(config.seed + runIndex);
     
-    // Ensure initial state is repaired
-    generator.repair(dfg, currentState);
+    // Ensure initial state is repaired or randomized
+    if (config.randomInit) {
+        generator.randomize(dfg, currentState);
+    } else {
+        generator.repair(dfg, currentState);
+    }
     
     CostEvaluator::evaluate(dfg, currentState, config.alpha, config.beta, config.latencyNorm, config.areaNorm);
     

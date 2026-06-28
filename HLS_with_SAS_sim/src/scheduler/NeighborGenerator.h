@@ -30,6 +30,13 @@ public:
     void generate(const DFG& dfg, ScheduleState& state);
 
     /**
+     * @brief Randomizes the start times and resource bindings of a state.
+     * @param dfg The Data Flow Graph.
+     * @param state The state to be randomized.
+     */
+    void randomize(const DFG& dfg, ScheduleState& state);
+
+    /**
      * @brief Repairs a state to satisfy dependency and resource constraints.
      * @param dfg The Data Flow Graph.
      * @param state The state to be repaired.

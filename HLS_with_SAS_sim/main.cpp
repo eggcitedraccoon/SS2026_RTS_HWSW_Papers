@@ -61,11 +61,13 @@ void printStatistics(const std::vector<RunResult>& results) {
 int main(int argc, char* argv[]) {
     std::string dfgFile = "example.dfg";
     std::string configFile = "config.json";
+    bool randomInitRequested = false;
     
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--dfg" && i + 1 < argc) dfgFile = argv[++i];
         else if (arg == "--config" && i + 1 < argc) configFile = argv[++i];
+        else if (arg == "--random-init") randomInitRequested = true;
     }
 
     DFG dfg;
@@ -79,6 +81,8 @@ int main(int argc, char* argv[]) {
     if (!JSONConfigParser::parseConfig(configFile, config, dfg, initialState)) {
         std::cerr << "Failed to parse config: " << configFile << ". Using defaults.\n";
     }
+    
+    if (randomInitRequested) config.randomInit = true;
 
     // Manual override from CLI could be added here
 
@@ -98,7 +102,7 @@ int main(int argc, char* argv[]) {
     double listCost = CostEvaluator::evaluate(dfg, listState, config.alpha, config.beta, config.latencyNorm, config.areaNorm);
     std::cout << "List Scheduler Cost: " << listCost << " (Lat: " << listState.latency << ", Area: " << listState.area << ")\n";
     
-    std::cout << "Starting SA Optimization (" << config.runs << " runs)..." << std::endl;
+    std::cout << "Starting SA Optimization (" << config.runs << " runs)" << (config.randomInit ? " with random initialization" : "") << "..." << std::endl;
     
     std::vector<RunResult> results;
     for (int i = 0; i < config.runs; ++i) {

@@ -34,6 +34,7 @@ bool JSONConfigParser::parseConfig(const std::string& filename, SAConfig& config
             if (sa.contains("beta")) config.beta = sa["beta"];
             if (sa.contains("runs")) config.runs = sa["runs"];
             if (sa.contains("seed")) config.seed = sa["seed"];
+            if (sa.contains("random_init")) config.randomInit = sa["random_init"];
         }
 
         int resourceIdCounter = 0;

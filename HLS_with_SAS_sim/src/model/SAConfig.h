@@ -21,6 +21,7 @@ struct SAConfig {
     double areaNorm = 1.0;              ///< Normalization factor for area
     int runs = 30;                      ///< Number of independent SA runs for statistical analysis
     int seed = 42;                      ///< Random seed for reproducibility
+    bool randomInit = false;            ///< Use random initial state if true
 };
 
 #endif // SACONFIG_H
