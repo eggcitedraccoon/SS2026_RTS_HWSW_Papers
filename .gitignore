@@ -7,6 +7,7 @@
 !/RTS/**/*.tex
 !/RTS/**/*.bib
 !/RTS/*.pdf
+!/RTS/assets/
 
 !/HWSW/**/*.tex
 !/HWSW/**/*.bib
