@@ -27,6 +27,9 @@
 }
 
 % -------------------------------------------------------------------
+% Visible TODO marker. Remove all \todo{...} calls before final submission.
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+% -------------------------------------------------------------------
 
 \begin{document}
 
@@ -48,7 +51,220 @@
     \pagenumbering{arabic}
     \setcounter{page}{1}
 
+    \begin{abstract}
+        %TODO 3--4 sentences: (1) HLS scheduling/binding/allocation is a combinatorial, NP-hard problem that determines the latency-area trade-off of the generated hardware; (2) this paper formulates joint scheduling, resource binding, and resource allocation as a single-cost simulated annealing (SA) search; (3) a C++ simulator was built implementing this SA scheduler with ASAP/List-scheduling baselines, evaluated on a 515-operation arithmetic data-flow graph; (4) state the headline quantitative result (e.g., \% cost/latency/area improvement of SA over ASAP/List, and the achieved run-to-run variance) once final experiments in Section~\ref{sec:simulation} are locked in.
+    \end{abstract}
+
     \vspace{0.5em}
-    Text \cite{Devadas1989}
+
+    \section{Introduction}
+    \label{sec:introduction}
+    \todo{Motivate the problem: in HLS, scheduling assigns operations from a data-flow
+    graph (DFG) to control steps, binding maps operations to functional-unit instances,
+    and allocation decides how many instances of each resource type exist. These three
+    sub-problems are interdependent and jointly NP-hard, so classical HLS tools solve
+    them with fast greedy heuristics (ASAP, ALAP, List Scheduling) that are optimal
+    only under restrictive assumptions and get trapped in local optima w.r.t. the
+    latency-area cost surface.}
+    \todo{Explain why simulated annealing is a natural fit: it accepts worsening moves
+    with a temperature-controlled probability, letting it escape the local optima that
+    greedy list scheduling cannot, and it has prior precedent in VLSI CAD data-path
+    synthesis (cite \cite{Devadas1989}). Contrast with exact approaches (ILP) that do
+    not scale to realistic DFG sizes.}
+    \todo{List explicit contributions as bullets: (1) a joint scheduling + binding +
+    allocation SA formulation with a single weighted cost function
+    (Section~\ref{sec:math-basics}); (2) a concrete move set and repair mechanism that
+    keeps every candidate schedule feasible (Section~\ref{sec:algorithm}); (3) a
+    complexity and empirical runtime-overhead analysis of the scheduler
+    (Section~\ref{sec:overhead}); (4) an experimental evaluation against ASAP/List
+    baselines and an $\alpha$/$\beta$ latency-area trade-off study on a realistic DFG
+    benchmark (Section~\ref{sec:simulation}).}
+    \todo{Close with a one-sentence roadmap of the remaining sections.}
+
+    \section{Related Work}
+    \label{sec:related-work}
+    \todo{Cover, at seminar-paper depth (no need for exhaustive survey): (1) classical
+    constructive scheduling heuristics -- ASAP, ALAP, List Scheduling (De Micheli-style
+    HLS textbook reference); (2) Force-Directed Scheduling (Paulin \& Knight) as the
+    classic latency-constrained heuristic; (3) exact formulations via ILP/constraint
+    programming and why they do not scale; (4) metaheuristics applied to HLS/data-path
+    synthesis -- simulated annealing for combined register/FU/interconnect allocation
+    \cite{Devadas1989}, and (briefly) genetic algorithms / tabu search as alternative
+    metaheuristics used elsewhere in HLS design-space exploration.}
+    \todo{End with a positioning paragraph: how this work's move set differs from
+    \cite{Devadas1989} -- here resource \emph{count} itself is a first-class move
+    (add/remove resource instance), not just placement/binding, so allocation and
+    scheduling are optimized in the same search rather than in separate passes.}
+
+    \section{Problem Statement}
+    \label{sec:problem-statement}
+    \todo{Formally define the input: a data-flow graph $G=(V,E)$ where $V$ are
+    operations (typed, e.g. LOAD/STORE/ADD/SUB/MUL/DIV) and $E$ are data
+    dependencies; a resource library where each type has an area cost, a fixed
+    latency (in cycles), and an available instance count.}
+    \todo{Define the decision variables: start cycle $c(v)$ for every operation $v$,
+    and a resource-instance binding $r(v)$. State the constraints precisely:
+    (1) dependency/precedence -- $c(v) \geq c(u) + \text{latency}(u)$ for every edge
+    $(u,v)\in E$; (2) resource exclusivity -- no two operations bound to the same
+    resource instance may have overlapping $[c(v), c(v)+\text{latency}(v))$ intervals.}
+    \todo{State the objective informally here (formalized in
+    Section~\ref{sec:math-basics}): minimize a weighted combination of schedule
+    latency and total allocated area. Argue why the joint problem is NP-hard (it
+    subsumes resource-constrained scheduling) and why the combined search space
+    (cycle assignment $\times$ binding $\times$ resource count) is too large for
+    exhaustive or exact search at realistic DFG sizes -- ground this with the actual
+    benchmark used later: 515 operations, 6 resource types (see
+    Section~\ref{sec:simulation}).}
+
+    \section{Mathematical Foundations}
+    \label{sec:math-basics}
+
+    \subsection{Cost Function}
+    \label{sec:cost-function}
+    \todo{Define $\text{Cost} = \alpha \cdot \text{Latency} + \beta \cdot \text{Area}$
+    matching the simulator's \texttt{CostEvaluator}. Define Latency as
+    $\max_v (c(v)+\text{latency}(v))$ and Area as the sum of area costs over all
+    \emph{allocated} resource instances (not per-operation). Discuss the role of
+    $\alpha,\beta$ as a scalarization of a two-objective (latency, area) Pareto
+    problem, and note this is what is swept in the trade-off study of
+    Section~\ref{sec:simulation}.}
+
+    \subsection{Simulated Annealing Formalism}
+    \label{sec:sa-formalism}
+    \todo{Present the Metropolis acceptance criterion:
+    $P(\text{accept}) = 1$ if $\Delta \leq 0$, else $P = e^{-\Delta/T}$ where
+    $\Delta = \text{Cost}_{\text{next}} - \text{Cost}_{\text{current}}$. Present the
+    geometric cooling schedule actually used, $T_{k+1} = \gamma \cdot T_k$, with
+    $\gamma$ the \texttt{cooling\_rate} config parameter, run until $T <
+    \texttt{min\_temperature}$. Briefly mention the classical theoretical result
+    (Kirkpatrick et al.; Geman \& Geman) that logarithmic cooling guarantees
+    convergence to a global optimum in the limit, and note explicitly that the
+    geometric schedule used in practice trades that guarantee for tractable runtime --
+    this sets up the overhead discussion in Section~\ref{sec:overhead}.}
+
+    \section{Simulated Annealing Scheduling Algorithm}
+    \label{sec:algorithm}
+
+    \subsection{State Representation and Initialization}
+    \label{sec:sa-state}
+    \todo{Describe the candidate-solution representation: per-operation start cycle,
+    per-operation resource binding, and the current resource pool (instance count per
+    type). State that the initial state is produced by an ASAP schedule with the
+    minimum resource pool, giving SA a feasible but latency-unaware starting point.}
+
+    \subsection{Neighbor Generation and Repair}
+    \label{sec:sa-moves}
+    \todo{Enumerate the five move types implemented in \texttt{NeighborGenerator}:
+    (1) move operation forward in time, (2) move operation backward in time (clamped
+    at cycle 0), (3) rebind an operation to another compatible resource instance,
+    (4) add a new resource instance of a chosen type, (5) remove a resource instance
+    (never the last of its type; bound operations are automatically rebound).
+    Explain that each move is followed by a \texttt{repair} pass: dependency repair
+    (recursively push successors forward if causality is violated) and resource
+    overlap repair (shift operations forward if two ops now collide on the same
+    resource instance). Emphasize that repair guarantees every accepted neighbor is a
+    feasible schedule, which is what allows the raw Metropolis criterion to be used
+    without a separate penalty term.}
+
+    \subsection{Acceptance, Cooling, and Multi-Run Strategy}
+    \label{sec:sa-accept}
+    \todo{Tie Section~\ref{sec:sa-formalism}'s formalism to the concrete loop: at each
+    temperature level, run \texttt{iterations\_per\_temp} neighbor trials before
+    cooling by \texttt{cooling\_rate}. Explain the multi-run strategy: the simulator
+    performs \texttt{runs} independent SA searches (different seeds) and reports the
+    best-of-N, plus best/worst/average/median/stddev statistics -- this is what feeds
+    the statistical-robustness results in Section~\ref{sec:simulation}. Include a
+    compact pseudocode listing (\texttt{algorithm} / \texttt{algorithmic} environment)
+    of the outer SA loop.}
+
+    \section{Runtime and Overhead Analysis}
+    \label{sec:overhead}
+
+    \subsection{Theoretical Complexity}
+    \label{sec:overhead-theory}
+    \todo{Derive per-iteration cost: move generation is $O(1)$ (or $O(|\text{resources
+    of a type}|)$ for rebind), while a repair pass is worst-case $O(|V|+|E|)$ due to
+    recursive successor propagation. State total work as
+    $\text{runs} \times (\text{temperature levels}) \times
+    \text{iterations\_per\_temp} \times O(|V|+|E|)$, and plug in the actual benchmark
+    parameters from \texttt{config.json} (515 operations, cooling\_rate 0.95,
+    iterations\_per\_temp 50, runs 10) to get a concrete iteration-count estimate.}
+
+    \subsection{Empirical Overhead}
+    \label{sec:overhead-empirical}
+    \todo{Report measured wall-clock time from the \texttt{time\_ms} column of
+    \texttt{run\_summary.csv} across the available result sets
+    (\texttt{results\_2}, \texttt{results\_10}--\texttt{results\_23},
+    \texttt{results\_opt\_area}) -- mean/median per-run time and total optimization
+    time. Discuss scalability: how time scales with DFG size (515 ops) and resource
+    pool size, and whether this overhead (seconds, one-time at compile time) is
+    acceptable relative to the near-instant runtime of ASAP/List scheduling, given HLS
+    scheduling is a one-off, offline compilation step rather than something run
+    repeatedly.}
+
+    \section{Simulation}
+    \label{sec:simulation}
+
+    \subsection{Experimental Setup}
+    \label{sec:sim-setup}
+    \todo{Describe the simulator implementation: C++26, modular structure
+    (\texttt{parser}/\texttt{model}/\texttt{scheduler}/\texttt{cost}/\texttt{output}),
+    DFG text format, JSON-configured SA parameters and resource library. Describe the
+    benchmark DFG used (\texttt{example.dfg}): 515 operations mixing LOAD/STORE/ADD/
+    SUB/MUL/DIV, structured as parallel reduction trees over multiple data vectors
+    (state a concrete description of what the kernel computes, e.g. resembles a
+    normalized correlation/least-squares-style computation, once confirmed). Include
+    a resource-library table (type, area, latency, instance count) transcribed from
+    \texttt{config.json}, and an SA hyperparameter table ($T_0=1$,
+    cooling\_rate$=0.95$, min\_temperature$=0.005$, iterations\_per\_temp$=50$,
+    runs$=10$, $\alpha=0.75$, $\beta=0.25$, seed).}
+
+    \subsection{Baseline Comparison}
+    \label{sec:sim-baseline}
+    \todo{Report a table comparing ASAP, List Scheduling, and best-of-N SA on
+    latency, area, and combined cost for the benchmark DFG (the simulator already
+    computes ASAP/List baselines each run -- pull these numbers from console output /
+    re-run to log them). Quantify SA's improvement over each baseline in \% terms and
+    discuss where the gain comes from (SA jointly tunes resource count, which the
+    fixed-resource-pool baselines cannot do).}
+
+    \subsection{Convergence and Statistical Robustness}
+    \label{sec:sim-convergence}
+    \todo{Present a convergence plot (derived from \texttt{run\_X\_convergence.csv} /
+    \texttt{cost\_vs\_temp\_combined.png}) showing cost vs. temperature/iteration for
+    the best run, and discuss the qualitative cooling behavior described in
+    \texttt{sa\_details.md} (broad exploration at high $T$, greedy settling at low
+    $T$). Report the multi-run statistics (best/worst/average/median/std.\ dev.\ of
+    final cost across the \texttt{runs} independent trials, from
+    \texttt{run\_summary.csv}) and the cost-distribution histogram
+    (\texttt{cost\_distribution.png}) to argue whether SA converges consistently or
+    has high run-to-run variance -- this determines whether a single run suffices in
+    practice or multi-run best-of-N is necessary.}
+
+    \subsection{Latency-Area Trade-off}
+    \label{sec:sim-tradeoff}
+    \todo{Compare the default-weighted configuration ($\alpha=0.75,\beta=0.25$,
+    \texttt{results\_10} etc.) against the area-optimized configuration
+    (\texttt{results\_opt\_area}, presumably higher $\beta$) to show the achieved
+    latency-area Pareto trade-off. Include the best-schedule Gantt chart
+    (\texttt{best\_gantt.png}) for at least one configuration to make the resulting
+    schedule concrete. If a systematic $\alpha$/$\beta$ sweep was not yet run beyond
+    these two points, note that as a planned addition or explicitly scope it out.}
+
+    \section{Conclusion}
+    \label{sec:conclusion}
+    \todo{Summarize the contribution and restate the headline quantitative result
+    from Section~\ref{sec:sim-baseline} (SA vs.\ ASAP/List) once final numbers are
+    available. State limitations honestly: single benchmark DFG (no CHStone/MachSuite
+    generalization test), fixed geometric cooling schedule (no adaptive/reheating
+    strategy), no comparison against other metaheuristics (GA, tabu search, PSO) or
+    against an exact ILP solution on a small-scale instance for optimality-gap
+    validation. Propose future work: adaptive cooling, multi-objective Pareto-front
+    search (e.g., NSGA-II-style) instead of scalarized $\alpha/\beta$ cost, a larger
+    benchmark suite, and integration with a real HLS front end (e.g., Vitis HLS or
+    Bambu) to validate synthesized-hardware results against the simulator's cost
+    model.}
+
+
     \bibliography{main}
 \end{document}
