@@ -132,11 +132,14 @@ int main(int argc, char* argv[]) {
     #endif
 
     CsvExporter::exportRunSummary(outputDir + "/run_summary.csv", results);
+    CsvExporter::exportCostFunctionParams(outputDir + "/cost_function.csv", config.alpha, config.beta,
+                                           config.latencyNorm, config.areaNorm);
     
     for (const auto& res : results) {
         std::string runPrefix = outputDir + "/run_" + std::to_string(res.runIndex);
         CsvExporter::exportTempStats(runPrefix + "_temp_stats.csv", res.tempStats);
         CsvExporter::exportConvergenceLog(runPrefix + "_convergence.csv", res, res.tempsLog);
+        CsvExporter::exportAcceptedTrace(runPrefix + "_accepted_trace.csv", res.acceptedTrace);
     }
     
     CsvExporter::exportGantt(outputDir + "/best_gantt.csv", dfg, bestRunIt->bestState);

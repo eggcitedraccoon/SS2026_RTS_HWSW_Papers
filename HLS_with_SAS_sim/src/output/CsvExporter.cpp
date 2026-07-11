@@ -38,10 +38,27 @@ void CsvExporter::exportConvergenceLog(const std::string& filename, const RunRes
 void CsvExporter::exportTempStats(const std::string& filename, const std::vector<TempStats>& stats) {
     std::ofstream f(filename);
     if (!f.is_open()) return;
-    f << "temperature,avg_cost,max_cost,min_cost\n";
+    f << "temperature,resulting_cost\n";
     for (const auto& s : stats) {
-        f << s.temperature << "," << s.avgCost << "," << s.maxCost << "," << s.minCost << "\n";
+        f << s.temperature << "," << s.resultingCost << "\n";
     }
+}
+
+void CsvExporter::exportAcceptedTrace(const std::string& filename, const std::vector<AcceptedPoint>& trace) {
+    std::ofstream f(filename);
+    if (!f.is_open()) return;
+    f << "iteration,temperature,latency,area,cost\n";
+    for (const auto& p : trace) {
+        f << p.iteration << "," << p.temperature << "," << p.latency << "," << p.area << "," << p.cost << "\n";
+    }
+}
+
+void CsvExporter::exportCostFunctionParams(const std::string& filename, double alpha, double beta,
+                                            double latencyNorm, double areaNorm) {
+    std::ofstream f(filename);
+    if (!f.is_open()) return;
+    f << "alpha,beta,latency_norm,area_norm\n";
+    f << alpha << "," << beta << "," << latencyNorm << "," << areaNorm << "\n";
 }
 
 void CsvExporter::exportGantt(const std::string& filename, const DFG& dfg, const ScheduleState& state) {

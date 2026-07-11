@@ -13,13 +13,25 @@
 
 /**
  * @struct TempStats
- * @brief Statistics for a single temperature level.
+ * @brief Records, for a single temperature level, the cost of the solution the
+ * run actually carries forward into the next (cooler) level.
  */
 struct TempStats {
     double temperature;
-    double avgCost;
-    double maxCost;
-    double minCost;
+    double resultingCost;
+};
+
+/**
+ * @struct AcceptedPoint
+ * @brief One accepted solution along the search trajectory, for 3D
+ * cost/latency/area visualization.
+ */
+struct AcceptedPoint {
+    int iteration;
+    double temperature;
+    int latency;
+    int area;
+    double cost;
 };
 
 /**
@@ -34,6 +46,7 @@ struct RunResult {
     std::vector<double> bestCostLog;                ///< Best-so-far cost, sampled in sync with convergenceLog
     std::vector<double> tempsLog;                   ///< Log of temperature over iterations
     std::vector<TempStats> tempStats;               ///< Statistics per temperature level
+    std::vector<AcceptedPoint> acceptedTrace;       ///< Every accepted solution, in order
 };
 
 /**

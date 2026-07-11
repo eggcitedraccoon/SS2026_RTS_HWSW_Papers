@@ -15,11 +15,11 @@ Contains the summary of all independent runs performed during the simulation.
 - **executionTimeMs**: Real-time duration of the run in milliseconds.
 
 ### 2. `run_X_temp_stats.csv`
-Detailed statistics for each temperature level in a specific run (where `X` is the run index).
-- **temperature**: The temperature value at that step.
-- **avg_cost**: The average cost calculated across all iterations at this temperature.
-- **max_cost**: The highest cost encountered at this temperature.
-- **min_cost**: The lowest cost encountered at this temperature.
+One row per temperature level in a specific run (where `X` is the run index).
+- **temperature**: The temperature value at that level.
+- **resulting_cost**: The cost of the solution this run actually carries forward into the next, cooler
+  temperature level (i.e. the current state once all iterations at this level are done). This is a
+  single value per level, not an average or extremum over the level's iterations.
 
 ### 3. `run_X_convergence.csv`
 High-resolution log of the cost during the optimization process.
@@ -46,11 +46,12 @@ A histogram showing the distribution of the final costs across all runs.
 - Includes vertical lines for the **Average** and **Best** costs.
 
 ### 2. `cost_vs_temp_combined.png`
-An aggregated view of how the cost evolves as the temperature decreases (cooling).
-- **Best/Worst**: Absolute best and worst costs found at each temperature across ALL runs.
-- **Avg Best/Avg Worst**: The average of the best/worst costs found at each temperature across all runs.
-- **Plain Average**: The mean of the average costs across all runs.
-- **Interpretation**: A converging set of lines indicates that the algorithm is settling into a local or global optimum.
+An aggregated view of how the cost evolves as the temperature decreases (cooling). At each
+temperature level, every run contributes exactly one value -- its `resulting_cost` (see above).
+- **Best**: The minimum resulting cost across all runs, at each temperature.
+- **Worst**: The maximum resulting cost across all runs, at each temperature.
+- **Mean**: The average resulting cost across all runs, at each temperature.
+- **Interpretation**: A converging set of lines indicates that runs are settling into similar (and improving) solutions as the temperature drops.
 
 ### 3. `best_gantt.png`
 A horizontal bar chart representing the best schedule.

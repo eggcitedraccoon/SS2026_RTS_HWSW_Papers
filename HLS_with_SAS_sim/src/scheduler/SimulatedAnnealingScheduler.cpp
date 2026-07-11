@@ -9,7 +9,6 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
-#include <limits>
 
 /**
  * @brief Main SA loop.
@@ -44,45 +43,51 @@ RunResult SimulatedAnnealingScheduler::run(const DFG& dfg, const SAConfig& confi
     RunResult result;
     result.runIndex = runIndex;
 
+    // Trajectory starting point, for the 3D cost/latency/area plot.
+    result.acceptedTrace.push_back({0, T, currentState.latency, currentState.area, currentState.cost});
+
     int totalIterations = 0;
     while (T > config.minimumTemperature) {
-        double sumCost = 0;
-        double minCost = std::numeric_limits<double>::max();
-        double maxCost = -std::numeric_limits<double>::max();
-
         for (int i = 0; i < config.iterationsPerTemp; ++i) {
             ScheduleState nextState = currentState;
             generator.generate(dfg, nextState);
             CostEvaluator::evaluate(dfg, nextState, config.alpha, config.beta, config.latencyNorm, config.areaNorm);
-            
+
             double delta = nextState.cost - currentState.cost;
-            
+            bool accepted = false;
+
             if (delta < 0) {
                 currentState = nextState;
+                accepted = true;
             } else {
                 double p = std::exp(-delta / T);
                 if (dist(acceptanceGen) < p) {
                     currentState = nextState;
+                    accepted = true;
                 }
             }
-            
+
             if (currentState.cost < bestState.cost) {
                 bestState = currentState;
             }
-            
-            sumCost += currentState.cost;
-            minCost = std::min(minCost, currentState.cost);
-            maxCost = std::max(maxCost, currentState.cost);
 
             totalIterations++;
+
+            if (accepted) {
+                result.acceptedTrace.push_back(
+                    {totalIterations, T, currentState.latency, currentState.area, currentState.cost});
+            }
             if (totalIterations % 100 == 0) {
                 result.convergenceLog.push_back({totalIterations, currentState.cost});
                 result.bestCostLog.push_back(bestState.cost);
                 result.tempsLog.push_back(T);
             }
         }
-        
-        result.tempStats.push_back({T, sumCost / config.iterationsPerTemp, maxCost, minCost});
+
+        // currentState is exactly what carries over into the next, cooler
+        // temperature level -- record that resulting cost, and nothing else,
+        // for this level.
+        result.tempStats.push_back({T, currentState.cost});
         T *= config.coolingRate;
     }
     
