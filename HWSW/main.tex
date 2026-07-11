@@ -18,6 +18,8 @@
 \usepackage{float}
 \usepackage{tikz}
 \usetikzlibrary{positioning,shapes.geometric,arrows.meta}
+\usepackage{algorithm}
+\usepackage{algorithmic}
 \bibliographystyle{IEEEtran}
 \hypersetup{
     colorlinks=true,
@@ -52,218 +54,466 @@
     \setcounter{page}{1}
 
     \begin{abstract}
-        %TODO 3--4 sentences: (1) HLS scheduling/binding/allocation is a combinatorial, NP-hard problem that determines the latency-area trade-off of the generated hardware; (2) this paper formulates joint scheduling, resource binding, and resource allocation as a single-cost simulated annealing (SA) search; (3) a C++ simulator was built implementing this SA scheduler with ASAP/List-scheduling baselines, evaluated on a 515-operation arithmetic data-flow graph; (4) state the headline quantitative result (e.g., \% cost/latency/area improvement of SA over ASAP/List, and the achieved run-to-run variance) once final experiments in Section~\ref{sec:simulation} are locked in.
+        %TODO 3--4 sentences: (1) HLS scheduling/binding/allocation is a combinatorial, NP-hard problem that determines the latency-area trade-off of the generated hardware; (2) this paper formulates joint scheduling, resource binding, and resource allocation as a single-cost simulated annealing (SA) search; (3) a C++ simulator was built implementing this SA scheduler, seeded from an ASAP schedule, and evaluated on a 515-operation arithmetic data-flow graph; (4) state the headline observation (how the alpha/beta cost weighting reshapes the cost-vs-temperature search landscape around the ASAP-seeded start) once final experiments in Section~\ref{sec:simulation} are locked in.
     \end{abstract}
 
     \vspace{0.5em}
 
     \section{Introduction}
     \label{sec:introduction}
-    \todo{Motivate the problem: in HLS, scheduling assigns operations from a data-flow
-    graph (DFG) to control steps, binding maps operations to functional-unit instances,
-    and allocation decides how many instances of each resource type exist. These three
-    sub-problems are interdependent and jointly NP-hard, so classical HLS tools solve
-    them with fast greedy heuristics (ASAP, ALAP, List Scheduling) that are optimal
-    only under restrictive assumptions and get trapped in local optima w.r.t. the
-    latency-area cost surface.}
-    \todo{Explain why simulated annealing is a natural fit: it accepts worsening moves
-    with a temperature-controlled probability, letting it escape the local optima that
-    greedy list scheduling cannot, and it has prior precedent in VLSI CAD data-path
-    synthesis (cite \cite{Devadas1989}). Contrast with exact approaches (ILP) that do
-    not scale to realistic DFG sizes.}
-    \todo{List explicit contributions as bullets: (1) a joint scheduling + binding +
-    allocation SA formulation with a single weighted cost function
-    (Section~\ref{sec:math-basics}); (2) a concrete move set and repair mechanism that
-    keeps every candidate schedule feasible (Section~\ref{sec:algorithm}); (3) a
-    complexity and empirical runtime-overhead analysis of the scheduler
-    (Section~\ref{sec:overhead}); (4) an experimental evaluation against ASAP/List
-    baselines and an $\alpha$/$\beta$ latency-area trade-off study on a realistic DFG
-    benchmark (Section~\ref{sec:simulation}).}
-    \todo{Close with a one-sentence roadmap of the remaining sections.}
+
+    High-level synthesis (HLS) compiles a behavioral description into a register-transfer-level
+    data path by solving three interdependent sub-problems: \emph{scheduling} assigns each
+    operation of a data-flow graph (DFG) to a control step, \emph{binding} maps each scheduled
+    operation to a concrete functional-unit instance, and \emph{allocation} decides how many
+    instances of each resource type the data path actually contains. All three choices interact
+    through the same resource-usage pattern over time, and jointly they are NP-hard, since the
+    problem subsumes resource-constrained scheduling. Classical HLS tools sidestep this
+    complexity with fast constructive heuristics -- As-Soon-As-Possible (ASAP), As-Late-As-Possible
+    (ALAP), and List Scheduling -- that build a single schedule greedily, cycle by cycle. These
+    methods are optimal only under restrictive assumptions (e.g.\ unlimited resources, or a fixed
+    priority order that happens to match the true critical path) and, being purely constructive,
+    cannot revise an earlier decision once made; they therefore get trapped in local optima of the
+    latency--area cost surface.
+
+    Simulated annealing (SA) is a natural fit for escaping this trap: unlike greedy list
+    scheduling, it accepts \emph{worsening} moves with a temperature-controlled probability, which
+    lets the search leave local optima that a monotonically improving heuristic cannot escape, while
+    still converging to a stable solution as the temperature is lowered. SA-based data-path synthesis
+    also has direct precedent in VLSI CAD, where it was used to jointly allocate registers,
+    functional units, and interconnect \cite{Devadas1989}. This places SA in contrast to exact
+    formulations such as Integer Linear Programming (ILP), which can certify optimality but whose
+    solve time grows too quickly with problem size to remain practical on realistic DFGs.
+
+    This paper makes the following contributions:
+    \begin{itemize}
+        \item a joint scheduling + binding + allocation SA formulation driven by a single weighted
+        cost function (Section~\ref{sec:math-basics});
+        \item a concrete SA move set and repair mechanism that keeps every candidate schedule
+        feasible after each move (Section~\ref{sec:algorithm});
+        \item a complexity and empirical runtime-overhead analysis of the scheduler
+        (Section~\ref{sec:overhead});
+        \item an empirical study of how the $\alpha$/$\beta$ latency--area weighting reshapes the
+        search landscape around the ASAP-seeded starting point, on a realistic DFG benchmark
+        (Section~\ref{sec:simulation}).
+    \end{itemize}
+
+    The remainder of the paper first reviews related scheduling and allocation approaches
+    (Section~\ref{sec:related-work}), then formalizes the problem
+    (Section~\ref{sec:problem-statement}), before presenting the SA formulation, algorithm,
+    complexity analysis, and experiments in turn.
 
     \section{Related Work}
     \label{sec:related-work}
-    \todo{Cover, at seminar-paper depth (no need for exhaustive survey): (1) classical
-    constructive scheduling heuristics -- ASAP, ALAP, List Scheduling (De Micheli-style
-    HLS textbook reference); (2) Force-Directed Scheduling (Paulin \& Knight) as the
-    classic latency-constrained heuristic; (3) exact formulations via ILP/constraint
-    programming and why they do not scale; (4) metaheuristics applied to HLS/data-path
-    synthesis -- simulated annealing for combined register/FU/interconnect allocation
-    \cite{Devadas1989}, and (briefly) genetic algorithms / tabu search as alternative
-    metaheuristics used elsewhere in HLS design-space exploration.}
-    \todo{End with a positioning paragraph: how this work's move set differs from
-    \cite{Devadas1989} -- here resource \emph{count} itself is a first-class move
-    (add/remove resource instance), not just placement/binding, so allocation and
-    scheduling are optimized in the same search rather than in separate passes.}
+
+    Classical HLS tools schedule with fast constructive heuristics such as ASAP, ALAP, and List
+    Scheduling, or with the more refined Force-Directed Scheduling, which balances concurrency across
+    control steps to reduce resource cost under a fixed latency \cite{DeMicheli1994,PaulinKnight1989};
+    exact formulations based on integer linear programming can certify optimal schedules but scale
+    poorly with problem size \cite{HwangLeeHsu1991}. Simulated annealing has previously been used to
+    jointly allocate registers, functional units, and interconnect in data-path synthesis
+    \cite{Devadas1989}, and other metaheuristics such as genetic algorithms have likewise been applied
+    to combined HLS scheduling and allocation \cite{Heijligers1995}. This paper follows that SA-based
+    line of work, with one difference: the number of allocated resource instances is itself a move
+    within the same search, rather than being fixed in advance or optimized in a separate pass.
 
     \section{Problem Statement}
     \label{sec:problem-statement}
-    \todo{Formally define the input: a data-flow graph $G=(V,E)$ where $V$ are
-    operations (typed, e.g. LOAD/STORE/ADD/SUB/MUL/DIV) and $E$ are data
-    dependencies; a resource library where each type has an area cost, a fixed
-    latency (in cycles), and an available instance count.}
-    \todo{Define the decision variables: start cycle $c(v)$ for every operation $v$,
-    and a resource-instance binding $r(v)$. State the constraints precisely:
-    (1) dependency/precedence -- $c(v) \geq c(u) + \text{latency}(u)$ for every edge
-    $(u,v)\in E$; (2) resource exclusivity -- no two operations bound to the same
-    resource instance may have overlapping $[c(v), c(v)+\text{latency}(v))$ intervals.}
-    \todo{State the objective informally here (formalized in
-    Section~\ref{sec:math-basics}): minimize a weighted combination of schedule
-    latency and total allocated area. Argue why the joint problem is NP-hard (it
-    subsumes resource-constrained scheduling) and why the combined search space
-    (cycle assignment $\times$ binding $\times$ resource count) is too large for
-    exhaustive or exact search at realistic DFG sizes -- ground this with the actual
-    benchmark used later: 515 operations, 6 resource types (see
-    Section~\ref{sec:simulation}).}
+
+    \textbf{Input.} The input is a data-flow graph $G = (V, E)$, where each vertex $v \in V$ is a
+    typed operation (e.g.\ \texttt{LOAD}, \texttt{STORE}, \texttt{ADD}, \texttt{SUB}, \texttt{MUL},
+    \texttt{DIV}), and each edge $(u, v) \in E$ denotes a data dependency requiring $u$ to complete
+    before $v$ begins. A resource library specifies, for each resource type, an area cost, a fixed
+    latency in clock cycles, and an available instance count.
+
+    \textbf{Decision variables.} A candidate solution assigns to every operation $v \in V$ a start
+    cycle $c(v) \in \mathbb{N}$ and a resource-instance binding $r(v)$, identifying which physical
+    instance of $v$'s resource type executes it. A solution is \emph{feasible} iff it satisfies:
+    \begin{enumerate}
+        \item \textbf{Precedence:} for every edge $(u, v) \in E$,
+        $c(v) \geq c(u) + \mathrm{latency}(u)$;
+        \item \textbf{Resource exclusivity:} for any two operations $v_1 \neq v_2$ with
+        $r(v_1) = r(v_2)$, their execution intervals
+        $[c(v), c(v) + \mathrm{latency}(v))$ do not overlap.
+    \end{enumerate}
+
+    \textbf{Objective.} Informally, the goal is to find a feasible $(c, r)$, together with an
+    instance count per resource type, that minimizes a weighted combination of total schedule
+    latency and total allocated area; the precise weighted cost function is defined in
+    Section~\ref{sec:math-basics}.
+
+    \textbf{Complexity.} The joint problem is NP-hard, since fixing the resource counts and binding
+    already reduces it to resource-constrained scheduling, itself a well-known NP-hard problem. Here
+    allocation is not fixed but part of the search, so the combined search space -- cycle
+    assignment $\times$ binding $\times$ resource count -- is strictly larger still. Even for DFGs of
+    modest size, the number of feasible schedules grows far too quickly for exhaustive or exact
+    search to remain practical, which motivates the simulated-annealing-based approach developed in
+    Sections~\ref{sec:math-basics} and~\ref{sec:algorithm}.
 
     \section{Mathematical Foundations}
     \label{sec:math-basics}
 
     \subsection{Cost Function}
     \label{sec:cost-function}
-    \todo{Define $\text{Cost} = \alpha \cdot \text{Latency} + \beta \cdot \text{Area}$
-    matching the simulator's \texttt{CostEvaluator}. Define Latency as
-    $\max_v (c(v)+\text{latency}(v))$ and Area as the sum of area costs over all
-    \emph{allocated} resource instances (not per-operation). Discuss the role of
-    $\alpha,\beta$ as a scalarization of a two-objective (latency, area) Pareto
-    problem, and note this is what is swept in the trade-off study of
-    Section~\ref{sec:simulation}.}
+
+    Every candidate solution $(c, r, k)$ from Section~\ref{sec:problem-statement} is scored by a
+    single scalar cost,
+    \begin{equation}
+        \text{Cost}(c, r, k) = \alpha \cdot L(c) + \beta \cdot A(k),
+        \label{eq:cost}
+    \end{equation}
+    combining two terms. The latency term $L(c) = \max_{v \in V} \big(c(v) + \mathrm{latency}(v)\big)$
+    is the schedule length in clock cycles, i.e.\ the completion time of the last operation. The area
+    term $A(k) = \sum_{t} k_t \cdot \mathrm{area}(t)$ is the total hardware cost of the allocated
+    resource pool, summing the unit area of each resource type $t$ over its allocated instance count
+    $k_t$; note that area depends only on how many instances are allocated, not on how many operations
+    are bound to them. The weights $\alpha, \beta \geq 0$ let a designer trade latency against area:
+    Equation~\eqref{eq:cost} is a linear scalarization of the underlying two-objective
+    (latency, area) problem into the single objective that the search of Section~\ref{sec:algorithm}
+    minimizes, and different choices of $\alpha/\beta$ correspond to different preferences on that
+    trade-off.
 
     \subsection{Simulated Annealing Formalism}
     \label{sec:sa-formalism}
-    \todo{Present the Metropolis acceptance criterion:
-    $P(\text{accept}) = 1$ if $\Delta \leq 0$, else $P = e^{-\Delta/T}$ where
-    $\Delta = \text{Cost}_{\text{next}} - \text{Cost}_{\text{current}}$. Present the
-    geometric cooling schedule actually used, $T_{k+1} = \gamma \cdot T_k$, with
-    $\gamma$ the \texttt{cooling\_rate} config parameter, run until $T <
-    \texttt{min\_temperature}$. Briefly mention the classical theoretical result
-    (Kirkpatrick et al.; Geman \& Geman) that logarithmic cooling guarantees
-    convergence to a global optimum in the limit, and note explicitly that the
-    geometric schedule used in practice trades that guarantee for tractable runtime --
-    this sets up the overhead discussion in Section~\ref{sec:overhead}.}
+
+    Simulated annealing explores the space of feasible solutions by repeatedly proposing a
+    neighboring solution and deciding whether to move there. Let $\text{Cost}_{\text{cur}}$ be the
+    cost of the current solution and $\text{Cost}_{\text{next}}$ the cost of a proposed neighbor, and
+    define $\Delta = \text{Cost}_{\text{next}} - \text{Cost}_{\text{cur}}$. The neighbor is accepted
+    with the Metropolis probability
+    \begin{equation}
+        P(\Delta, T) =
+        \begin{cases}
+            1, & \Delta \leq 0, \\
+            e^{-\Delta / T}, & \Delta > 0,
+        \end{cases}
+        \label{eq:metropolis}
+    \end{equation}
+    where $T$ is the current \emph{temperature}: improving moves are always accepted, while worsening
+    moves are accepted with a probability that shrinks as $\Delta$ grows or $T$ falls. Temperature is
+    lowered geometrically,
+    \begin{equation}
+        T_{k+1} = \gamma \cdot T_k, \qquad 0 < \gamma < 1,
+        \label{eq:cooling}
+    \end{equation}
+    starting from an initial temperature $T_0$ and stopping once $T$ drops below a minimum threshold
+    $T_{\min}$. At high temperature, Equation~\eqref{eq:metropolis} accepts almost any move, so the
+    search explores broadly and can escape local optima of the cost surface; as $T \to T_{\min}$, only
+    improving or mildly worsening moves survive, so the search behaves increasingly like a greedy
+    local search and settles into a minimum. A slow enough (e.g.\ logarithmic) cooling schedule is
+    known to converge to a global optimum in the limit, but at a runtime cost that grows accordingly;
+    the finite, geometric schedule of Equation~\eqref{eq:cooling} trades that asymptotic guarantee for
+    a bounded number of iterations, which we return to in Section~\ref{sec:overhead}.
 
     \section{Simulated Annealing Scheduling Algorithm}
     \label{sec:algorithm}
 
     \subsection{State Representation and Initialization}
     \label{sec:sa-state}
-    \todo{Describe the candidate-solution representation: per-operation start cycle,
-    per-operation resource binding, and the current resource pool (instance count per
-    type). State that the initial state is produced by an ASAP schedule with the
-    minimum resource pool, giving SA a feasible but latency-unaware starting point.}
+
+    A candidate solution is represented directly as the triple $(c, r, k)$ from
+    Section~\ref{sec:problem-statement}: a start cycle $c(v)$ for every operation, a resource-instance
+    binding $r(v)$, and a resource pool $k = (k_t)_t$ giving the number of allocated instances per
+    resource type. The search is initialized with an ASAP schedule computed under the \emph{full}
+    resource pool declared in the configuration -- every available instance of every type, not just
+    the minimum needed. Each operation is placed at the earliest cycle its predecessors allow and
+    greedily bound to a free instance, with the repair mechanism of Section~\ref{sec:sa-moves}
+    resolving any remaining conflicts. This initial solution is feasible by construction and, because
+    the pool is generous, typically already close to latency-optimal; it is far from cost-optimal in
+    another sense, however, since every declared instance counts toward its area whether the schedule
+    actually uses it or not. Section~\ref{sec:sim-process} returns to this starting point in detail, as
+    it turns out to matter for how the search behaves.
 
     \subsection{Neighbor Generation and Repair}
     \label{sec:sa-moves}
-    \todo{Enumerate the five move types implemented in \texttt{NeighborGenerator}:
-    (1) move operation forward in time, (2) move operation backward in time (clamped
-    at cycle 0), (3) rebind an operation to another compatible resource instance,
-    (4) add a new resource instance of a chosen type, (5) remove a resource instance
-    (never the last of its type; bound operations are automatically rebound).
-    Explain that each move is followed by a \texttt{repair} pass: dependency repair
-    (recursively push successors forward if causality is violated) and resource
-    overlap repair (shift operations forward if two ops now collide on the same
-    resource instance). Emphasize that repair guarantees every accepted neighbor is a
-    feasible schedule, which is what allows the raw Metropolis criterion to be used
-    without a separate penalty term.}
+
+    At each step, a neighboring solution is produced by applying one randomly chosen move to the
+    current solution:
+    \begin{enumerate}
+        \item \textbf{Move forward}: shift a randomly chosen operation one cycle later.
+        \item \textbf{Move backward}: shift a randomly chosen operation one cycle earlier (clamped at
+        cycle $0$).
+        \item \textbf{Rebind}: reassign a randomly chosen operation to a different, compatible
+        instance of its resource type.
+        \item \textbf{Add resource}: increase $k_t$ by one for a chosen resource type $t$.
+        \item \textbf{Remove resource}: decrease $k_t$ by one for a chosen resource type $t$ (never
+        below one), automatically rebinding any operations that were using the removed instance.
+    \end{enumerate}
+    A move can, on its own, break one of the two feasibility conditions of
+    Section~\ref{sec:problem-statement} -- for example moving an operation earlier than one of its
+    predecessors, or binding two operations to the same instance at overlapping cycles. Every move is
+    therefore followed by a \emph{repair} step: \emph{dependency repair} recursively pushes an
+    operation's successors forward whenever precedence is violated, and \emph{resource-overlap repair}
+    shifts operations forward whenever two operations sharing an instance now overlap in time. Because
+    repair always restores a feasible solution, the Metropolis test of
+    Equation~\eqref{eq:metropolis} can be applied directly to the resulting cost, without any
+    additional penalty term for infeasibility.
 
     \subsection{Acceptance, Cooling, and Multi-Run Strategy}
     \label{sec:sa-accept}
-    \todo{Tie Section~\ref{sec:sa-formalism}'s formalism to the concrete loop: at each
-    temperature level, run \texttt{iterations\_per\_temp} neighbor trials before
-    cooling by \texttt{cooling\_rate}. Explain the multi-run strategy: the simulator
-    performs \texttt{runs} independent SA searches (different seeds) and reports the
-    best-of-N, plus best/worst/average/median/stddev statistics -- this is what feeds
-    the statistical-robustness results in Section~\ref{sec:simulation}. Include a
-    compact pseudocode listing (\texttt{algorithm} / \texttt{algorithmic} environment)
-    of the outer SA loop.}
+
+    Algorithm~\ref{alg:sas} summarizes the full outer loop. At each temperature level, a fixed number
+    of neighbors are proposed, repaired, and accepted or rejected via Equation~\eqref{eq:metropolis};
+    the best solution found so far is tracked separately from the current solution, since a worsening
+    move may still be accepted along the way. Once the proposals at a given temperature are exhausted,
+    the temperature is cooled with Equation~\eqref{eq:cooling} and the process repeats until $T$ falls
+    below $T_{\min}$. Because the outcome of a single run depends on its random sequence of proposed
+    moves, the scheduler performs several independent runs from different random seeds and reports the
+    best solution found across all of them.
+
+    \begin{algorithm}[t]
+        \caption{Simulated Annealing Scheduling (SAS)}
+        \label{alg:sas}
+        \begin{algorithmic}[1]
+            \REQUIRE DFG $G = (V, E)$, resource library, $T_0$, $T_{\min}$, $\gamma$, iterations per
+            temperature level $I$
+            \ENSURE best solution found $S^\ast$
+            \STATE $S \leftarrow \text{ASAP}(G)$ with minimal resource pool
+            \STATE $S^\ast \leftarrow S$
+            \STATE $T \leftarrow T_0$
+            \WHILE{$T > T_{\min}$}
+                \FOR{$i = 1$ to $I$}
+                    \STATE $S' \leftarrow \text{Repair}(\text{Move}(S))$
+                    \STATE $\Delta \leftarrow \text{Cost}(S') - \text{Cost}(S)$
+                    \IF{$\Delta \leq 0$ \OR $\text{rand}(0,1) < e^{-\Delta/T}$}
+                        \STATE $S \leftarrow S'$
+                        \IF{$\text{Cost}(S) < \text{Cost}(S^\ast)$}
+                            \STATE $S^\ast \leftarrow S$
+                        \ENDIF
+                    \ENDIF
+                \ENDFOR
+                \STATE $T \leftarrow \gamma \cdot T$
+            \ENDWHILE
+            \RETURN $S^\ast$
+        \end{algorithmic}
+    \end{algorithm}
 
     \section{Runtime and Overhead Analysis}
     \label{sec:overhead}
 
     \subsection{Theoretical Complexity}
     \label{sec:overhead-theory}
-    \todo{Derive per-iteration cost: move generation is $O(1)$ (or $O(|\text{resources
-    of a type}|)$ for rebind), while a repair pass is worst-case $O(|V|+|E|)$ due to
-    recursive successor propagation. State total work as
-    $\text{runs} \times (\text{temperature levels}) \times
-    \text{iterations\_per\_temp} \times O(|V|+|E|)$, and plug in the actual benchmark
-    parameters from \texttt{config.json} (515 operations, cooling\_rate 0.95,
-    iterations\_per\_temp 50, runs 10) to get a concrete iteration-count estimate.}
+
+    Generating a candidate neighbor is cheap: four of the five move types touch a single operation
+    and run in $O(1)$, while rebind is $O(m_t)$ in the number of available instances $m_t$ of the
+    relevant resource type, which is normally small. The repair step dominates instead: dependency
+    repair can, in the worst case, propagate through every remaining successor of the moved operation,
+    and resource-overlap repair can likewise touch every operation sharing that instance, so a single
+    move-and-repair step costs $O(|V| + |E|)$ in the worst case. At a given temperature, $I$ such steps
+    are performed, and the number of temperature levels visited before $T$ drops below $T_{\min}$ is
+    $\lceil \log_\gamma (T_{\min} / T_0) \rceil$. Repeating this for a number of independent runs
+    $R$, the total worst-case work is
+    \begin{equation}
+        O\Big(R \cdot \big\lceil \log_\gamma (T_{\min}/T_0) \big\rceil \cdot I \cdot (|V| + |E|)\Big).
+        \label{eq:complexity}
+    \end{equation}
+    Every factor in Equation~\eqref{eq:complexity} except the graph size $|V| + |E|$ is a
+    user-controlled parameter of the search, which makes the runtime-quality trade-off of
+    Section~\ref{sec:sa-formalism} explicit and tunable, at the cost of no longer offering an
+    asymptotic optimality guarantee.
 
     \subsection{Empirical Overhead}
     \label{sec:overhead-empirical}
-    \todo{Report measured wall-clock time from the \texttt{time\_ms} column of
-    \texttt{run\_summary.csv} across the available result sets
-    (\texttt{results\_2}, \texttt{results\_10}--\texttt{results\_23},
-    \texttt{results\_opt\_area}) -- mean/median per-run time and total optimization
-    time. Discuss scalability: how time scales with DFG size (515 ops) and resource
-    pool size, and whether this overhead (seconds, one-time at compile time) is
-    acceptable relative to the near-instant runtime of ASAP/List scheduling, given HLS
-    scheduling is a one-off, offline compilation step rather than something run
-    repeatedly.}
+
+    The bound in Equation~\eqref{eq:complexity} is a worst case dominated by graph size and the
+    number of accepted iterations; it is not a tight estimate of actual runtime, since a repair step
+    rarely needs to touch the whole graph in practice. Section~\ref{sec:simulation} reports the
+    wall-clock overhead measured on the implemented simulator to complement this theoretical bound
+    with concrete numbers.
 
     \section{Simulation}
     \label{sec:simulation}
 
-    \subsection{Experimental Setup}
-    \label{sec:sim-setup}
-    \todo{Describe the simulator implementation: C++26, modular structure
-    (\texttt{parser}/\texttt{model}/\texttt{scheduler}/\texttt{cost}/\texttt{output}),
-    DFG text format, JSON-configured SA parameters and resource library. Describe the
-    benchmark DFG used (\texttt{example.dfg}): 515 operations mixing LOAD/STORE/ADD/
-    SUB/MUL/DIV, structured as parallel reduction trees over multiple data vectors
-    (state a concrete description of what the kernel computes, e.g. resembles a
-    normalized correlation/least-squares-style computation, once confirmed). Include
-    a resource-library table (type, area, latency, instance count) transcribed from
-    \texttt{config.json}, and an SA hyperparameter table ($T_0=1$,
-    cooling\_rate$=0.95$, min\_temperature$=0.005$, iterations\_per\_temp$=50$,
-    runs$=10$, $\alpha=0.75$, $\beta=0.25$, seed).}
+    The concepts of Sections~\ref{sec:math-basics} and~\ref{sec:algorithm} are implemented in a
+    C++ simulator built around the model of Section~\ref{sec:problem-statement}. This section walks
+    through what the simulator consumes and produces, how its starting point is obtained, and then
+    makes one observation about how the search behaves as the cost function's weights change.
 
-    \subsection{Baseline Comparison}
-    \label{sec:sim-baseline}
-    \todo{Report a table comparing ASAP, List Scheduling, and best-of-N SA on
-    latency, area, and combined cost for the benchmark DFG (the simulator already
-    computes ASAP/List baselines each run -- pull these numbers from console output /
-    re-run to log them). Quantify SA's improvement over each baseline in \% terms and
-    discuss where the gain comes from (SA jointly tunes resource count, which the
-    fixed-resource-pool baselines cannot do).}
+    \subsection{Input: Data-Flow Graph and Configuration}
+    \label{sec:sim-input}
 
-    \subsection{Convergence and Statistical Robustness}
-    \label{sec:sim-convergence}
-    \todo{Present a convergence plot (derived from \texttt{run\_X\_convergence.csv} /
-    \texttt{cost\_vs\_temp\_combined.png}) showing cost vs. temperature/iteration for
-    the best run, and discuss the qualitative cooling behavior described in
-    \texttt{sa\_details.md} (broad exploration at high $T$, greedy settling at low
-    $T$). Report the multi-run statistics (best/worst/average/median/std.\ dev.\ of
-    final cost across the \texttt{runs} independent trials, from
-    \texttt{run\_summary.csv}) and the cost-distribution histogram
-    (\texttt{cost\_distribution.png}) to argue whether SA converges consistently or
-    has high run-to-run variance -- this determines whether a single run suffices in
-    practice or multi-run best-of-N is necessary.}
+    The simulator takes two inputs. The DFG is a flat text file, one operation per line, giving an
+    operation's type and its operand identifiers; dependencies are inferred directly from those
+    operand references. The benchmark DFG used throughout this section follows this pattern:
+    \begin{verbatim}
+t1   = LOAD(D1A1)
+t9   = LOAD(D1B1)
+t17  = MUL(t1, t9)
+t18  = MUL(t2, t10)
+t25  = ADD(t17, t18)
+...
+t511 = ADD(t510, t509)
+t515 = DIV(t511, t514)
+STORE(t515)
+    \end{verbatim}
+    The full graph repeats this load--multiply--reduce pattern across several input vectors, combines
+    the resulting partial sums through further addition and subtraction stages, and finishes with a
+    division and a store, for 515 operations over the six operation types \texttt{LOAD}, \texttt{STORE},
+    \texttt{ADD}, \texttt{SUB}, \texttt{MUL}, and \texttt{DIV}.
 
-    \subsection{Latency-Area Trade-off}
+    Alongside the DFG, a JSON configuration fixes the SA parameters and the resource library:
+    \begin{verbatim}
+{
+  "sa": {
+    "initial_temperature": 1,
+    "cooling_rate": 0.95,
+    "min_temperature": 0.005,
+    "iterations_per_temp": 50,
+    "runs": 10,
+    "alpha": 0.75,
+    "beta": 0.25,
+    "seed": 6324798
+  },
+  "resources": {
+    "LOAD":  {"count": 25, "area": 5,  "latency": 1},
+    "STORE": {"count": 25, "area": 5,  "latency": 1},
+    "ADD":   {"count": 25, "area": 5,  "latency": 1},
+    "SUB":   {"count": 25, "area": 5,  "latency": 1},
+    "MUL":   {"count": 25, "area": 15, "latency": 3},
+    "DIV":   {"count": 25, "area": 40, "latency": 4}
+  }
+}
+    \end{verbatim}
+    \texttt{initial\_temperature}, \texttt{min\_temperature}, and \texttt{cooling\_rate} are $T_0$,
+    $T_{\min}$, and $\gamma$ from Equation~\eqref{eq:cooling}; \texttt{iterations\_per\_temp} is $I$
+    and \texttt{runs} is the number of independent restarts $R$, both from
+    Algorithm~\ref{alg:sas}; \texttt{alpha} and \texttt{beta} are the cost-function weights of
+    Equation~\eqref{eq:cost} -- the two values varied in Section~\ref{sec:sim-tradeoff}; and
+    \texttt{seed} fixes the random number generator for reproducibility. Under \texttt{resources},
+    each entry instantiates one resource type from Section~\ref{sec:problem-statement}: \texttt{count}
+    is the maximum number of instances that may ever be allocated, \texttt{area} their unit area cost,
+    and \texttt{latency} their fixed execution latency in cycles.
+
+    \subsection{Output: The Resulting Schedule}
+    \label{sec:sim-output}
+
+    The simulator's output is a concrete assignment of every operation to a resource instance and a
+    cycle interval -- the $(c, r, k)$ triple of Section~\ref{sec:sa-state}, made explicit. An excerpt
+    of the best schedule found for the benchmark DFG:
+    \begin{table}[h]
+        \centering
+        \caption{Excerpt of the resulting schedule (best solution found).}
+        \label{tab:gantt}
+        \begin{tabular}{lccc}
+            \toprule
+            Resource & Start & End & Operation \\
+            \midrule
+            \texttt{Res\_7\_LOAD} & 4 & 5 & \texttt{t1} \\
+            \texttt{Res\_7\_LOAD} & 0 & 1 & \texttt{t2} \\
+            \texttt{Res\_3\_MUL}  & 6 & 9 & \texttt{t17} \\
+            \texttt{Res\_1\_ADD}  & 9 & 10 & \texttt{t25} \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+    Each row fixes the start cycle $c(v)$, the binding $r(v)$ -- a named instance, not just a
+    resource type -- and its cycle interval $[c(v), c(v) + \mathrm{latency}(v))$. The set of distinct
+    instance names appearing in the table, grouped by type, is the allocated pool $k$. Read cycle by
+    cycle, this table is exactly the control-step schedule a downstream HLS back end would use to
+    drive the datapath's control logic.
+
+    \subsection{From ASAP Baseline to Optimized Schedule}
+    \label{sec:sim-process}
+
+    Simulated annealing does not start from an arbitrary or random solution: the initial state
+    $S_0$ handed to Algorithm~\ref{alg:sas} is an ASAP schedule computed under the \emph{full}
+    resource pool declared in the configuration, i.e.\ every \texttt{count}-many instance of every
+    type is available from the start. Each operation is placed at the earliest cycle its predecessors
+    allow and greedily bound to a free instance, with the same repair mechanism of
+    Section~\ref{sec:sa-moves} resolving any remaining conflicts. Because the pool is generous
+    relative to the parallelism present in the benchmark DFG, this ASAP-derived starting point is
+    already close to latency-optimal -- there is little room left to shorten the schedule further.
+    Its area, however, is essentially the configuration's maximum: every declared instance is
+    allocated whether or not the schedule actually uses it, so a large part of the initial resource
+    pool sits idle.
+
+    This asymmetry -- an already-good latency paired with a deliberately wasteful area -- is not an
+    incidental implementation detail. As Section~\ref{sec:sim-tradeoff} shows, it directly shapes how
+    the search behaves once $\alpha$ and $\beta$ change how costly that idle area is judged to be.
+
+    \subsection{Cost-versus-Temperature Landscape}
     \label{sec:sim-tradeoff}
-    \todo{Compare the default-weighted configuration ($\alpha=0.75,\beta=0.25$,
-    \texttt{results\_10} etc.) against the area-optimized configuration
-    (\texttt{results\_opt\_area}, presumably higher $\beta$) to show the achieved
-    latency-area Pareto trade-off. Include the best-schedule Gantt chart
-    (\texttt{best\_gantt.png}) for at least one configuration to make the resulting
-    schedule concrete. If a systematic $\alpha$/$\beta$ sweep was not yet run beyond
-    these two points, note that as a planned addition or explicitly scope it out.}
+
+    Within a single run, at each temperature level $T$, the scheduler records the cost of the
+    \emph{current} (post-decision) solution after every one of the $I$ proposals evaluated at that
+    level -- not the cost of every proposed neighbor, but only the cost the chain actually settles on
+    after each accept/reject step, so a rejected proposal simply re-records the previous value. From
+    these $I$ recorded values, the scheduler keeps their mean, minimum, and maximum for that run and
+    that temperature. Aggregating across all $R$ independent runs at a given temperature then yields
+    five quantities: the \emph{best} (the minimum, over all runs, of each run's minimum), the
+    \emph{mean best} (the average, over runs, of each run's minimum), the \emph{mean} (the average,
+    over runs, of each run's own mean), the \emph{mean worst} (the average, over runs, of each run's
+    maximum), and the \emph{worst} (the maximum, over all runs, of each run's maximum). Plotting these
+    five quantities against temperature, read right to left from $T_0$ down to $T_{\min}$, is the tool
+    used below to visualize how the search behaves.
+
+    Figures~\ref{fig:tradeoff-075}--\ref{fig:tradeoff-025} show this plot for three configurations
+    that differ only in $\alpha$ and $\beta$: latency-optimizing ($\alpha=0.75,\beta=0.25$), balanced
+    ($\alpha=0.5,\beta=0.5$), and area-optimizing ($\alpha=0.25,\beta=0.75$), all else held fixed.
+
+    \begin{figure}[t]
+        \centering
+        \fbox{\begin{minipage}[c][4cm][c]{0.85\linewidth}
+            \centering\textit{Placeholder --- cost vs.\ temperature\\($\alpha=0.75$, $\beta=0.25$, latency-optimizing)}
+        \end{minipage}}
+        \caption{Cost vs.\ temperature, latency-optimizing weighting.}
+        \label{fig:tradeoff-075}
+    \end{figure}
+
+    \begin{figure}[t]
+        \centering
+        \fbox{\begin{minipage}[c][4cm][c]{0.85\linewidth}
+            \centering\textit{Placeholder --- cost vs.\ temperature\\($\alpha=0.5$, $\beta=0.5$, balanced)}
+        \end{minipage}}
+        \caption{Cost vs.\ temperature, balanced weighting.}
+        \label{fig:tradeoff-050}
+    \end{figure}
+
+    \begin{figure}[t]
+        \centering
+        \fbox{\begin{minipage}[c][4cm][c]{0.85\linewidth}
+            \centering\textit{Placeholder --- cost vs.\ temperature\\($\alpha=0.25$, $\beta=0.75$, area-optimizing)}
+        \end{minipage}}
+        \caption{Cost vs.\ temperature, area-optimizing weighting.}
+        \label{fig:tradeoff-025}
+    \end{figure}
+
+    The one point these three plots are meant to make concerns the slope near $T_0$: how sharply the
+    worst/mean-worst/mean lines rise as the search first moves away from the ASAP-seeded starting
+    point $S_0$ of Section~\ref{sec:sim-process}. Under the latency-optimizing weighting, $S_0$ sits
+    in a deep well of the cost surface -- it is already close to latency-optimal, so almost any move
+    away from it, even a small one, is charged heavily by the large $\alpha$, and the rise near $T_0$
+    is correspondingly steep. As $\beta$ grows and $\alpha$ shrinks, the same $S_0$ is no longer
+    sitting in a well at all: its area is close to the configuration's maximum, which is now the
+    dominant, heavily weighted term, so $S_0$ sits closer to a local \emph{peak} than a local minimum.
+    Moves that shed idle resource instances are downhill in almost every direction from there, so the
+    search can lower cost with little resistance, and the initial rise flattens out.
+
+    Two caveats apply when reading these three plots side by side. First, the cost function itself
+    changes between them, so the absolute cost values on the $y$-axis are not directly comparable
+    across figures -- only the \emph{shape} of each curve, relative to its own starting cost, carries
+    meaning. Second, that shape is not merely descriptive: it feeds back into the search through the
+    Metropolis criterion of Equation~\eqref{eq:metropolis}, since the acceptance probability depends
+    on $\Delta$ in the very units these plots show. Read as a potential-energy landscape, the
+    latency-optimizing configuration presents a narrow, steep-sided well around $S_0$; the
+    area-optimizing configuration instead presents a shallow, almost flat basin that gives way to a
+    steady, near-monotonic fall as the temperature cools and idle resources are progressively removed.
 
     \section{Conclusion}
     \label{sec:conclusion}
-    \todo{Summarize the contribution and restate the headline quantitative result
-    from Section~\ref{sec:sim-baseline} (SA vs.\ ASAP/List) once final numbers are
-    available. State limitations honestly: single benchmark DFG (no CHStone/MachSuite
-    generalization test), fixed geometric cooling schedule (no adaptive/reheating
-    strategy), no comparison against other metaheuristics (GA, tabu search, PSO) or
-    against an exact ILP solution on a small-scale instance for optimality-gap
-    validation. Propose future work: adaptive cooling, multi-objective Pareto-front
-    search (e.g., NSGA-II-style) instead of scalarized $\alpha/\beta$ cost, a larger
-    benchmark suite, and integration with a real HLS front end (e.g., Vitis HLS or
-    Bambu) to validate synthesized-hardware results against the simulator's cost
-    model.}
+    \todo{Summarize the contribution and restate the headline observation from
+    Section~\ref{sec:sim-tradeoff} (how the $\alpha$/$\beta$ weighting reshapes the
+    cost-vs-temperature landscape around the ASAP-seeded start) once the three
+    configurations have been fully run. State limitations honestly: a single
+    benchmark DFG (no CHStone/MachSuite generalization test), no quantitative
+    baseline comparison against ASAP or other scheduling heuristics, a fixed
+    geometric cooling schedule (no adaptive/reheating strategy), and no comparison
+    against other metaheuristics (GA, tabu search, PSO) or an exact ILP solution on a
+    small-scale instance for optimality-gap validation. Propose future work: a
+    quantitative SA-vs-ASAP evaluation, adaptive cooling, multi-objective
+    Pareto-front search (e.g., NSGA-II-style) instead of scalarized $\alpha/\beta$
+    cost, a larger benchmark suite, and integration with a real HLS front end (e.g.,
+    Vitis HLS or Bambu) to validate synthesized-hardware results against the
+    simulator's cost model.}
 
 
     \bibliography{main}
