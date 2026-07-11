@@ -9,7 +9,6 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
-#include <limits>
 
 /**
  * @brief Main SA loop.
@@ -46,17 +45,13 @@ RunResult SimulatedAnnealingScheduler::run(const DFG& dfg, const SAConfig& confi
 
     int totalIterations = 0;
     while (T > config.minimumTemperature) {
-        double sumCost = 0;
-        double minCost = std::numeric_limits<double>::max();
-        double maxCost = -std::numeric_limits<double>::max();
-
         for (int i = 0; i < config.iterationsPerTemp; ++i) {
             ScheduleState nextState = currentState;
             generator.generate(dfg, nextState);
             CostEvaluator::evaluate(dfg, nextState, config.alpha, config.beta, config.latencyNorm, config.areaNorm);
-            
+
             double delta = nextState.cost - currentState.cost;
-            
+
             if (delta < 0) {
                 currentState = nextState;
             } else {
@@ -65,14 +60,10 @@ RunResult SimulatedAnnealingScheduler::run(const DFG& dfg, const SAConfig& confi
                     currentState = nextState;
                 }
             }
-            
+
             if (currentState.cost < bestState.cost) {
                 bestState = currentState;
             }
-            
-            sumCost += currentState.cost;
-            minCost = std::min(minCost, currentState.cost);
-            maxCost = std::max(maxCost, currentState.cost);
 
             totalIterations++;
             if (totalIterations % 100 == 0) {
@@ -81,8 +72,11 @@ RunResult SimulatedAnnealingScheduler::run(const DFG& dfg, const SAConfig& confi
                 result.tempsLog.push_back(T);
             }
         }
-        
-        result.tempStats.push_back({T, sumCost / config.iterationsPerTemp, maxCost, minCost});
+
+        // currentState is exactly what carries over into the next, cooler
+        // temperature level -- record that resulting cost, and nothing else,
+        // for this level.
+        result.tempStats.push_back({T, currentState.cost});
         T *= config.coolingRate;
     }
     

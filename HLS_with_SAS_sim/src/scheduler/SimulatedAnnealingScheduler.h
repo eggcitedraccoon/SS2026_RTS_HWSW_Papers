@@ -13,13 +13,12 @@
 
 /**
  * @struct TempStats
- * @brief Statistics for a single temperature level.
+ * @brief Records, for a single temperature level, the cost of the solution the
+ * run actually carries forward into the next (cooler) level.
  */
 struct TempStats {
     double temperature;
-    double avgCost;
-    double maxCost;
-    double minCost;
+    double resultingCost;
 };
 
 /**

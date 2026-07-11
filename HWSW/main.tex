@@ -379,7 +379,9 @@ STORE(t515)
     and \texttt{runs} is the number of independent restarts $R$, both from
     Algorithm~\ref{alg:sas}; \texttt{alpha} and \texttt{beta} are the cost-function weights of
     Equation~\eqref{eq:cost} -- the two values varied in Section~\ref{sec:sim-tradeoff}; and
-    \texttt{seed} fixes the random number generator for reproducibility. Under \texttt{resources},
+    \texttt{seed} is a base value from which each of the $R$ runs derives its own, distinct seed (an
+    offset of the run index), so restarts are independent random streams while the whole experiment
+    stays reproducible. Under \texttt{resources},
     each entry instantiates one resource type from Section~\ref{sec:problem-statement}: \texttt{count}
     is the maximum number of instances that may ever be allocated, \texttt{area} their unit area cost,
     and \texttt{latency} their fixed execution latency in cycles.
@@ -433,18 +435,17 @@ STORE(t515)
     \subsection{Cost-versus-Temperature Landscape}
     \label{sec:sim-tradeoff}
 
-    Within a single run, at each temperature level $T$, the scheduler records the cost of the
-    \emph{current} (post-decision) solution after every one of the $I$ proposals evaluated at that
-    level -- not the cost of every proposed neighbor, but only the cost the chain actually settles on
-    after each accept/reject step, so a rejected proposal simply re-records the previous value. From
-    these $I$ recorded values, the scheduler keeps their mean, minimum, and maximum for that run and
-    that temperature. Aggregating across all $R$ independent runs at a given temperature then yields
-    five quantities: the \emph{best} (the minimum, over all runs, of each run's minimum), the
-    \emph{mean best} (the average, over runs, of each run's minimum), the \emph{mean} (the average,
-    over runs, of each run's own mean), the \emph{mean worst} (the average, over runs, of each run's
-    maximum), and the \emph{worst} (the maximum, over all runs, of each run's maximum). Plotting these
-    five quantities against temperature, read right to left from $T_0$ down to $T_{\min}$, is the tool
-    used below to visualize how the search behaves.
+    At each temperature level $T$, a run's $I$ proposals at that level end with the search in some
+    particular current solution -- exactly the solution that is carried forward, unchanged, into the
+    next, cooler level. Rather than summarizing everything that happened during those $I$ proposals,
+    each run records only this single \emph{resulting cost}: one number per run, per temperature
+    level. Aggregating this resulting cost across all $R$ independent runs at a given temperature then
+    yields three quantities: the \emph{best} (the minimum resulting cost across runs), the
+    \emph{worst} (the maximum resulting cost across runs), and the \emph{mean} (the average resulting
+    cost across runs). Every run also uses its own random seed (Section~\ref{sec:sim-input}), so the
+    spread between best and worst reflects genuine run-to-run variation and not a shared random
+    sequence. Plotting these three quantities against temperature, read right to left from $T_0$ down
+    to $T_{\min}$, is the tool used below to visualize how the search behaves.
 
     Figures~\ref{fig:tradeoff-075}--\ref{fig:tradeoff-025} show this plot for three configurations
     that differ only in $\alpha$ and $\beta$: latency-optimizing ($\alpha=0.75,\beta=0.25$), balanced
@@ -478,8 +479,8 @@ STORE(t515)
     \end{figure}
 
     The one point these three plots are meant to make concerns the slope near $T_0$: how sharply the
-    worst/mean-worst/mean lines rise as the search first moves away from the ASAP-seeded starting
-    point $S_0$ of Section~\ref{sec:sim-process}. Under the latency-optimizing weighting, $S_0$ sits
+    worst and mean lines rise as the search first moves away from the ASAP-seeded starting point $S_0$
+    of Section~\ref{sec:sim-process}. Under the latency-optimizing weighting, $S_0$ sits
     in a deep well of the cost surface -- it is already close to latency-optimal, so almost any move
     away from it, even a small one, is charged heavily by the large $\alpha$, and the rise near $T_0$
     is correspondingly steep. As $\beta$ grows and $\alpha$ shrinks, the same $S_0$ is no longer

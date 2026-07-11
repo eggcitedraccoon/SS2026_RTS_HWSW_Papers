@@ -38,28 +38,26 @@ def plot_combined_cost_vs_temp():
         all_dfs.append(df)
     
     combined = pd.concat(all_dfs)
-    
-    # Group by temperature and calculate required stats
+
+    # Each run contributes exactly one resulting cost per temperature level (the
+    # state it carries forward into the next, cooler level). Aggregate that
+    # single value across runs.
     stats = combined.groupby('temperature').agg(
-        best_cost=('min_cost', 'min'),
-        worst_cost=('max_cost', 'max'),
-        avg_cost=('avg_cost', 'mean'),
-        avg_best=('min_cost', 'mean'),
-        avg_worst=('max_cost', 'mean')
+        best_cost=('resulting_cost', 'min'),
+        worst_cost=('resulting_cost', 'max'),
+        mean_cost=('resulting_cost', 'mean')
     ).reset_index()
-    
+
     # Sort by temperature descending for cooling schedule feel
     stats = stats.sort_values('temperature', ascending=False)
-    
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=stats['temperature'], y=stats['best_cost'], name='Best', mode='lines+markers'))
-    fig.add_trace(go.Scatter(x=stats['temperature'], y=stats['avg_best'], name='Avg Best', mode='lines', line=dict(dash='dash')))
-    fig.add_trace(go.Scatter(x=stats['temperature'], y=stats['avg_cost'], name='Plain Average', mode='lines', line=dict(width=4)))
-    fig.add_trace(go.Scatter(x=stats['temperature'], y=stats['avg_worst'], name='Avg Worst', mode='lines', line=dict(dash='dash')))
+    fig.add_trace(go.Scatter(x=stats['temperature'], y=stats['mean_cost'], name='Mean', mode='lines', line=dict(width=4)))
     fig.add_trace(go.Scatter(x=stats['temperature'], y=stats['worst_cost'], name='Worst', mode='lines+markers'))
     
     fig.update_layout(
-        title='Cost vs Temperature (All Runs Combined)',
+        title='Cost vs Temperature (Resulting Solution per Run)',
         xaxis_title='Temperature',
         yaxis_title='Cost',
         xaxis_autorange='reversed'  # Showing cooling from right to left or left to right? usually T decreases.
