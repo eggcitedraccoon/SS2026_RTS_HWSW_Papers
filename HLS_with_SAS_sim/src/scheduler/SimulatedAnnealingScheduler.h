@@ -22,6 +22,19 @@ struct TempStats {
 };
 
 /**
+ * @struct AcceptedPoint
+ * @brief One accepted solution along the search trajectory, for 3D
+ * cost/latency/area visualization.
+ */
+struct AcceptedPoint {
+    int iteration;
+    double temperature;
+    int latency;
+    int area;
+    double cost;
+};
+
+/**
  * @struct RunResult
  * @brief Stores the outcome of a single Simulated Annealing execution.
  */
@@ -33,6 +46,7 @@ struct RunResult {
     std::vector<double> bestCostLog;                ///< Best-so-far cost, sampled in sync with convergenceLog
     std::vector<double> tempsLog;                   ///< Log of temperature over iterations
     std::vector<TempStats> tempStats;               ///< Statistics per temperature level
+    std::vector<AcceptedPoint> acceptedTrace;       ///< Every accepted solution, in order
 };
 
 /**

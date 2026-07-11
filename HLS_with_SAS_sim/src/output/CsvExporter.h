@@ -39,6 +39,27 @@ public:
     static void exportTempStats(const std::string& filename, const std::vector<TempStats>& stats);
 
     /**
+     * @brief Exports every accepted solution along a run's search trajectory
+     * (iteration, temperature, latency, area, cost), for 3D cost-surface plotting.
+     * @param filename Path to the output CSV file.
+     * @param trace Vector of AcceptedPoint.
+     */
+    static void exportAcceptedTrace(const std::string& filename, const std::vector<AcceptedPoint>& trace);
+
+    /**
+     * @brief Exports the alpha/beta weights and the latency/area normalization
+     * factors (derived from the ASAP baseline) used to compute cost, so external
+     * tools can reconstruct the exact cost function.
+     * @param filename Path to the output CSV file.
+     * @param alpha Latency weight.
+     * @param beta Area weight.
+     * @param latencyNorm Latency normalization factor.
+     * @param areaNorm Area normalization factor.
+     */
+    static void exportCostFunctionParams(const std::string& filename, double alpha, double beta,
+                                          double latencyNorm, double areaNorm);
+
+    /**
      * @brief Exports a Gantt-style CSV for schedule visualization.
      * @param filename Path to the output CSV file.
      * @param dfg The Data Flow Graph.

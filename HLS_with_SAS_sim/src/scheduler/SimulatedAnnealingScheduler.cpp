@@ -43,6 +43,9 @@ RunResult SimulatedAnnealingScheduler::run(const DFG& dfg, const SAConfig& confi
     RunResult result;
     result.runIndex = runIndex;
 
+    // Trajectory starting point, for the 3D cost/latency/area plot.
+    result.acceptedTrace.push_back({0, T, currentState.latency, currentState.area, currentState.cost});
+
     int totalIterations = 0;
     while (T > config.minimumTemperature) {
         for (int i = 0; i < config.iterationsPerTemp; ++i) {
@@ -51,13 +54,16 @@ RunResult SimulatedAnnealingScheduler::run(const DFG& dfg, const SAConfig& confi
             CostEvaluator::evaluate(dfg, nextState, config.alpha, config.beta, config.latencyNorm, config.areaNorm);
 
             double delta = nextState.cost - currentState.cost;
+            bool accepted = false;
 
             if (delta < 0) {
                 currentState = nextState;
+                accepted = true;
             } else {
                 double p = std::exp(-delta / T);
                 if (dist(acceptanceGen) < p) {
                     currentState = nextState;
+                    accepted = true;
                 }
             }
 
@@ -66,6 +72,11 @@ RunResult SimulatedAnnealingScheduler::run(const DFG& dfg, const SAConfig& confi
             }
 
             totalIterations++;
+
+            if (accepted) {
+                result.acceptedTrace.push_back(
+                    {totalIterations, T, currentState.latency, currentState.area, currentState.cost});
+            }
             if (totalIterations % 100 == 0) {
                 result.convergenceLog.push_back({totalIterations, currentState.cost});
                 result.bestCostLog.push_back(bestState.cost);

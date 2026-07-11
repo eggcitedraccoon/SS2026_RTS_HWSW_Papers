@@ -1,9 +1,9 @@
 {
   "sa": {
     "initial_temperature": 1,
-    "cooling_rate": 0.995,
+    "cooling_rate": 0.95,
     "min_temperature": 0.005,
-    "iterations_per_temp": 3,
+    "iterations_per_temp": 10,
     "runs": 50,
     "alpha": 0.15,
     "beta": 0.85,
