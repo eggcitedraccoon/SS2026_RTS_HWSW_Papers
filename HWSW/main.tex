@@ -91,7 +91,7 @@
         cost function (Section~\ref{sec:math-basics});
         \item a concrete SA move set and repair mechanism that keeps every candidate schedule
         feasible after each move (Section~\ref{sec:algorithm});
-        \item a complexity and empirical runtime-overhead analysis of the scheduler
+        \item a worst-case complexity analysis of the scheduler's per-move and per-run cost
         (Section~\ref{sec:overhead});
         \item an empirical study of how the $\alpha$/$\beta$ latency--area weighting reshapes the
         search landscape around the ASAP-seeded starting point, on a realistic DFG benchmark
@@ -268,7 +268,7 @@
             \REQUIRE DFG $G = (V, E)$, resource library, $T_0$, $T_{\min}$, $\gamma$, iterations per
             temperature level $I$
             \ENSURE best solution found $S^\ast$
-            \STATE $S \leftarrow \text{ASAP}(G)$ with minimal resource pool
+            \STATE $S \leftarrow \text{ASAP}(G)$ with full resource pool
             \STATE $S^\ast \leftarrow S$
             \STATE $T \leftarrow T_0$
             \WHILE{$T > T_{\min}$}
@@ -312,14 +312,15 @@
     Section~\ref{sec:sa-formalism} explicit and tunable, at the cost of no longer offering an
     asymptotic optimality guarantee.
 
-    \subsection{Empirical Overhead}
+    \subsection{Overhead in Practice}
     \label{sec:overhead-empirical}
 
     The bound in Equation~\eqref{eq:complexity} is a worst case dominated by graph size and the
     number of accepted iterations; it is not a tight estimate of actual runtime, since a repair step
-    rarely needs to touch the whole graph in practice. Section~\ref{sec:simulation} reports the
-    wall-clock overhead measured on the implemented simulator to complement this theoretical bound
-    with concrete numbers.
+    rarely needs to touch the whole graph in practice -- a moved operation's precedence and
+    resource conflicts are typically local to a small neighborhood of the DFG, not the whole
+    graph, so the per-move cost seen in practice is usually far below the $O(|V|+|E|)$ bound it is
+    measured against.
 
     \section{Simulation}
     \label{sec:simulation}
@@ -352,6 +353,7 @@ STORE(t515)
     \texttt{ADD}, \texttt{SUB}, \texttt{MUL}, and \texttt{DIV}.
 
     Alongside the DFG, a JSON configuration fixes the SA parameters and the resource library:
+    \begingroup\fontsize{7}{9}\selectfont
     \begin{verbatim}
 {
   "sa": {
@@ -374,6 +376,7 @@ STORE(t515)
   }
 }
     \end{verbatim}
+    \endgroup
     \texttt{initial\_temperature}, \texttt{min\_temperature}, and \texttt{cooling\_rate} are $T_0$,
     $T_{\min}$, and $\gamma$ from Equation~\eqref{eq:cooling}; \texttt{iterations\_per\_temp} is $I$
     and \texttt{runs} is the number of independent restarts $R$, both from
