@@ -49,8 +49,12 @@
     \setcounter{page}{1}
 
     \begin{abstract}
-        In real-time embedded systems, the joint scheduling of hard periodic tasks and soft aperiodic requests remains a critical challenge. While periodic tasks ensure system stability, aperiodic requests often require rapid response times without compromising hard deadlines. This paper explores the Dynamic Sporadic Server (DSS) algorithm, an extension of the fixed-priority Sporadic Server adapted for Earliest Deadline First (EDF) environments. We define the problem of aperiodic responsiveness, establish the mathematical foundations for DSS schedulability, and formalise the algorithm as an executable, burst-anchored state machine. This state machine is cross-checked against an independent UPPAAL timed-automata model, and its behaviour is then characterised empirically with a Python discrete-event simulation that compares DSS against a background (idle-time) aperiodic scheduler under an EDF-scheduled periodic task set. The simulation results show that DSS substantially reduces mean aperiodic response time by allowing the server to preempt periodic execution on its own EDF deadline, that response time is governed primarily by the server period $T_s$ rather than by utilisation $C_s/T_s$ alone, that the response-time distribution becomes multi-modal once the budget $C_s$ approaches individual request execution times, and that under aperiodic overload the periodic task set continues to meet every deadline even as aperiodic responsiveness degrades.
+        Real-time systems must schedule hard periodic tasks alongside soft aperiodic requests, which demand fast response without endangering periodic deadlines. This paper adapts the fixed-priority Sporadic Server to Earliest Deadline First (EDF) scheduling as the Dynamic Sporadic Server (DSS): we derive its burst-anchored replenishment rule, formalise it as an executable state machine, and validate it both structurally, against an independent UPPAAL timed-automata model, and empirically, via a Python discrete-event simulation against a background (idle-time) aperiodic scheduler. The simulation shows that DSS substantially lowers mean aperiodic response time by preempting periodic execution on its own EDF deadline; that responsiveness is governed chiefly by the server period $T_s$ rather than utilisation $C_s/T_s$ alone; that the response-time distribution turns multi-modal once $C_s$ approaches typical request execution times; and that periodic deadlines are met even under aperiodic overload, at the cost of aperiodic responsiveness.
     \end{abstract}
+
+    \begin{IEEEkeywords}
+        real-time systems, aperiodic scheduling, Earliest Deadline First, Dynamic Sporadic Server, schedulability analysis, UPPAAL, discrete-event simulation
+    \end{IEEEkeywords}
 
 
     \section{Introduction}
@@ -81,7 +85,7 @@
 
     The central problem addressed by the DSS algorithm is to optimise the average response time of soft aperiodic requests under EDF, while guaranteeing that the hard periodic task set remains exactly as schedulable as it would be without the server present — that is, the server must behave, from the periodic tasks' perspective, indistinguishably from an ordinary periodic task of utilisation $U_s = C_s / T_s$.
 
-    This requirement is non-trivial precisely because EDF assigns priority through absolute deadlines rather than static levels. A naïve dynamic-priority server that simply restores its full capacity $C_s$ and assigns itself a new deadline $d = t + T_s$ at every period boundary, irrespective of whether or when it actually executed, can "double hit" the system: if the server is granted a fresh deadline before its previous capacity has been fully consumed or accounted for, it can demand its budget twice within an interval shorter than $T_s$, exactly the anomaly that the original Sporadic Server was designed to prevent in the fixed-priority case. Under EDF, this excess demand manifests not as a priority-inversion problem but as an unaccounted increase in the server's effective utilisation within a bounded interval, which can cause periodic deadlines to be missed despite $U \leq 1$.
+    This requirement is non-trivial precisely because EDF assigns priority through absolute deadlines rather than static levels. A naïve dynamic-priority server that simply restores its full capacity $C_s$ and reassigns $d = t + T_s$ at every period boundary, irrespective of whether or when it actually executed, reproduces the same double-hit anomaly discussed above: it can demand its budget twice within an interval shorter than $T_s$. Under EDF, however, this excess demand manifests not as the priority-inversion problem it caused under fixed priorities, but as an unaccounted increase in the server's effective utilisation within a bounded interval, which can cause periodic deadlines to be missed despite $U \leq 1$.
 
     The challenge, therefore, is to define a replenishment rule for $C_s$ that:
     \begin{enumerate}
@@ -130,7 +134,7 @@
     \end{equation}
     An active period with no preemptions consists of a single burst, so this reduces to one replenishment of the server's full consumption, $T_s$ after activation — recovering the simple case implied by Equation~\ref{eq:activation}. An active period interrupted by preemptions instead accumulates several smaller pending replenishments, one per burst, each anchored to its own $t_{\mathrm{enter}}^k$.
 
-    This burst-anchored anchoring — rather than a per-instant one — is the same rule used by the original fixed-priority Sporadic Server, and it still guarantees that the server's cumulative execution within any interval of length $T_s$ never exceeds $C_s$: since the server consumes no capacity while idle prior to $t_{\mathrm{enter}}^k$, the entire burst $\epsilon_k$ falls within the window $[t_{\mathrm{enter}}^k,\, t_{\mathrm{enter}}^k + T_s)$, and that capacity is unavailable for any further consumption until $t_r^k$ closes that same window. This is the formal counterpart of requirement 2 in Section~\ref{sec:problem-statement}, and is what distinguishes DSS from the unconditional per-period replenishment of DS. Requirement 1 (capacity is not lost while idle) follows directly from Equation~\ref{eq:activation}: the server only consumes and assigns deadlines relative to actual request arrivals, never discarding $c_s$ at a period boundary the way PS does.
+    This burst-driven anchoring — rather than a per-instant one — is the same rule used by the original fixed-priority Sporadic Server, and it still guarantees that the server's cumulative execution within any interval of length $T_s$ never exceeds $C_s$: since the server consumes no capacity while idle prior to $t_{\mathrm{enter}}^k$, the entire burst $\epsilon_k$ falls within the window $[t_{\mathrm{enter}}^k,\, t_{\mathrm{enter}}^k + T_s)$, and that capacity is unavailable for any further consumption until $t_r^k$ closes that same window. This is the formal counterpart of requirement 2 in Section~\ref{sec:problem-statement}, and is what distinguishes DSS from the unconditional per-period replenishment of DS. Requirement 1 (capacity is not lost while idle) follows directly from Equation~\ref{eq:activation}: the server only consumes and assigns deadlines relative to actual request arrivals, never discarding $c_s$ at a period boundary the way PS does.
 
     \subsubsection{Schedulability Analysis}
     The inclusion of a DSS does not compromise the optimality of the EDF scheduler. A set of periodic tasks with utilisation $U_p$ and a DSS of utilisation $U_s = C_s/T_s$ is schedulable if and only if
@@ -166,27 +170,24 @@
         \item \textbf{EXE $\to$ IDLE}: Occurs if the pending aperiodic request completes, or if $c_s$ is exhausted before the request completes. As in the preemption case, a replenishment of the capacity consumed during the final burst is scheduled per Equation~\ref{eq:burst-replenish}, anchored to that burst's own $t_{\mathrm{enter}}$ — \emph{not} to the original start of the active period. If the server ran an entire active period uninterrupted, this reduces to a single replenishment of the full amount consumed, scheduled at $t_{\mathrm{enter}} + T_s$.
     \end{itemize}
 
-    Table~\ref{tab:dss-transitions} summarises these four transitions alongside their triggers and actions.
-
-    \begin{table*}[t]
-        \centering
-        \caption{DSS State Transitions}
-        \label{tab:dss-transitions}
-        \begin{tabular}{@{}lll@{}}
-            \toprule
-            From $\to$ To & Trigger & Action \\
-            \midrule
-            IDLE $\to$ READY & request arrives ($c_s>0$), or & set $d_s = t+T_s$ \\
-            & replenishment fires with backlog & (only if not already active) \\
-            READY $\to$ EXE  & shortest deadline \& request pending & $t_{\mathrm{enter}} \leftarrow t$ \\
-            EXE $\to$ READY  & preempted by shorter-deadline task & queue $(t_{\mathrm{enter}}+T_s,\ \epsilon)$ \\
-            EXE $\to$ IDLE   & request completes, or $c_s$ exhausted & queue $(t_{\mathrm{enter}}+T_s,\ \epsilon)$ \\
-            \bottomrule
-        \end{tabular}
-    \end{table*}
-
-    \subsection{Replenishment Rule}
-    Unlike a periodic server, DSS capacity is not replenished in a single lump at the start of a period. Instead, replenishment is tracked \emph{per execution burst}: whenever the server stops executing — whether due to preemption, request completion, or budget exhaustion — the capacity consumed during that specific burst is scheduled for return exactly $T_s$ time units after that burst \emph{began}, not after the server's original activation. A server that runs uninterrupted for an entire active period therefore receives one replenishment, for its full consumption, $T_s$ after it started; a server that is preempted and resumed multiple times accumulates several smaller pending replenishments, each anchored to its own burst's start time. This burst-anchored rule still guarantees that no capacity consumed at time $t$ becomes available again before $t + T_s$, which is precisely the invariant that prevents the "double-hit" problem and keeps the server's demand within any interval of length $T_s$ bounded by $C_s$.
+%    Table~\ref{tab:dss-transitions} summarises these four transitions alongside their triggers and actions.
+%
+%    \begin{table*}[t]
+%        \centering
+%        \caption{DSS State Transitions}
+%        \label{tab:dss-transitions}
+%        \begin{tabular}{@{}lll@{}}
+%            \toprule
+%            From $\to$ To & Trigger & Action \\
+%            \midrule
+%            IDLE $\to$ READY & request arrives ($c_s>0$), or & set $d_s = t+T_s$ \\
+%            & replenishment fires with backlog & (only if not already active) \\
+%            READY $\to$ EXE  & shortest deadline \& request pending & $t_{\mathrm{enter}} \leftarrow t$ \\
+%            EXE $\to$ READY  & preempted by shorter-deadline task & queue $(t_{\mathrm{enter}}+T_s,\ \epsilon)$ \\
+%            EXE $\to$ IDLE   & request completes, or $c_s$ exhausted & queue $(t_{\mathrm{enter}}+T_s,\ \epsilon)$ \\
+%            \bottomrule
+%        \end{tabular}
+%    \end{table*}
 
     \section{Runtime and Overhead Analysis}
     \label{sec:overhead}
@@ -202,16 +203,11 @@
     \section{UPPAAL Model}
     \label{sec:uppaal}
 
-    To validate the state-machine description of Section~\ref{sec:algorithm} independently of any particular implementation language, the DSS was additionally modelled in UPPAAL, a toolbox for modelling and verifying real-time systems as networks of timed automata. The model discretises time into fixed ticks of one time unit, generated by a dedicated \texttt{Ticker} process, and represents the periodic task set, the server, and the shared processor as separate parallel processes communicating over broadcast channels (\texttt{tick}, \texttt{request}, \texttt{reschedule}).
+    To validate the state-machine description of Section~\ref{sec:algorithm} independently of any particular implementation language, the DSS was additionally modelled in UPPAAL as a network of timed automata communicating over broadcast channels. Two \texttt{PeriodicTask} instances and one \texttt{DSS} instance realise the periodic task set and the server, respectively, each cycling through \textsc{Idle}, \textsc{Ready}, and \textsc{Active} locations mirroring the \textsc{Idle}/\textsc{Ready}/\textsc{Exe} states of Section~\ref{sec:algorithm}. A \texttt{CPU} process tracks processor occupancy, a \texttt{Source} process emits aperiodic \texttt{request} events, and a \texttt{Ticker} process advances global time in fixed one-unit steps, invoking the EDF task-selection logic and broadcasting \texttt{reschedule} to keep every process synchronised.
 
-    \subsection{Templates}
-    Two \texttt{PeriodicTask} instances $P_0, P_1$ and one \texttt{DSS} instance realise, respectively, the periodic task set and the server of Section~\ref{sec:algorithm}; each cycles through \textsc{Idle}, \textsc{Ready}, and \textsc{Active} locations mirroring the \textsc{Idle}/\textsc{Ready}/\textsc{Exe} states used earlier, with the DSS's transitions directly reflecting the burst-anchored replenishment rule of Equation~\ref{eq:burst-replenish}. A \texttt{CPU} process tracks whether the processor is idle or busy, a \texttt{Source} process periodically emits aperiodic \texttt{request} events to drive the DSS, and the \texttt{Ticker} process advances global time, invokes the EDF task-selection logic, and broadcasts \texttt{reschedule} so every process's location stays consistent with the newly computed schedule.
+    The scheduling and replenishment logic itself is kept as plain, tick-driven code in the model's global declarations rather than as automaton structure: \texttt{select\_task()} performs the EDF comparison over relative deadlines, and \texttt{update\_dss()} advances a circular buffer of pending $(t_r, \epsilon)$ replenishment pairs exactly as described in Section~\ref{sec:algorithm}. This keeps the automaton structure small while letting the bookkeeping that matters for correctness be inspected as ordinary code alongside the model.
 
-    \subsection{Global Declarations}
-    The scheduling and replenishment logic itself is implemented as plain, tick-driven code in the model's global declarations rather than as automaton structure: a \texttt{select\_task()} function performs the EDF comparison over relative deadlines, and an \texttt{update\_dss()} function advances a circular buffer of pending $(t_r, \epsilon)$ replenishment pairs exactly as described in Section~\ref{sec:algorithm}, decrementing outstanding replenishment timers on every tick and crediting the server's budget once they expire. This keeps the automaton structure small and lets the bookkeeping that matters for correctness — burst accounting, deadline assignment, replenishment timing — be inspected as ordinary code alongside the model.
-
-    \subsection{Limitations of Model Checking for this Model}
-    UPPAAL's verifier is a finite-state model checker, whereas the DSS as modelled here is inherently time-driven: its state includes deadline counters, a budget, and a replenishment queue that evolve over an effectively unbounded number of discrete ticks as the simulation horizon grows. This mismatch means that exhaustive reachability and safety queries over the model do not yield a sustainable, tool-independent guarantee of correctness the way they would for a naturally finite-state protocol. Accordingly, the UPPAAL model is used here as an executable cross-check of the state-machine formalisation of Section~\ref{sec:algorithm} against a second, independent tool, rather than as a proof of correctness; empirical validation is instead carried out through the discrete-event simulation described in the following section.
+    UPPAAL's verifier is, however, a finite-state model checker, whereas the DSS modelled here is inherently time-driven: its deadline counters, budget, and replenishment queue evolve over an effectively unbounded number of discrete ticks as the simulation horizon grows. Exhaustive reachability and safety queries therefore cannot yield a sustainable, tool-independent correctness guarantee the way they would for a naturally finite-state protocol. Accordingly, the UPPAAL model serves here as an executable cross-check of the state-machine formalisation against a second, independent tool, rather than as a proof of correctness; empirical validation is carried out instead through the discrete-event simulation of the following section.
 
 
     \section{Simulation}
@@ -232,7 +228,7 @@
         \label{fig:gantt-a-25}
     \end{figure}
 
-    Under DSS, the server competes on its own EDF deadline like any other task, so it preempts periodic execution directly from $t=0$ and aperiodic requests are served with markedly lower response time — while the periodic tasks still meet every deadline in both modes.
+    Under DSS, the server competes on its own EDF deadline like any other task, so it preempts periodic execution directly from $t=1$ and aperiodic requests are served with markedly lower response time — while the periodic tasks still meet every deadline in both modes.
 
     \begin{figure}[H]
         \centering
@@ -253,30 +249,28 @@
 
     \subsection{Effect of Server Period on Response Time}
     \label{sec:sim-period}
-    Fig.~\ref{fig:resp-613}--\ref{fig:resp-2450} compare response-time distributions, over a full 50\,s run, for $(C_s,T_s) \in \{(6,13),(12,25),(24,50)\}$. Here $12/25=0.48$ is the maximum utilisation the server can be given without violating $U_p+U_s\leq1$, so $(24,50)$ carries the same nominal utilisation, while $(6,13)$ is very slightly below it — $13$ is the nearest integer period above the unattainable $12.5$, so rounding actually reduces the achievable $U_s$ here. Even so, mean aperiodic response time decreases monotonically as $T_s$ shrinks: 7.24\,ms under the background scheduler, essentially unchanged at 7.24\,ms for $(24,50)$, falling to 5.72\,ms for $(12,25)$ and 4.43\,ms for $(6,13)$.
-
+    Fig.~\ref{fig:resp-613}--\ref{fig:resp-2450} compare response-time distributions, over a full 50\,s run, for $(C_s,T_s) \in \{(6,13),(12,25),(24,50)\}$.
     \begin{figure}[H]
         \centering
         \includegraphics[width=\linewidth]{assets/response_comparison_6-13.png}
         \caption{$C_s=6$, $T_s=13$.}
         \label{fig:resp-613}
     \end{figure}
-
+    Here $12/25=0.48$ is the maximum utilisation the server can be given without violating $U_p+U_s\leq1$, so $(24,50)$ carries the same nominal utilisation, while $(6,13)$ is very slightly below it — $13$ is the nearest integer period above the unattainable $12.5$, so rounding actually reduces the achievable $U_s$ here. However, mean aperiodic response time decreases monotonically as $T_s$ shrinks.
     \begin{figure}[H]
         \centering
         \includegraphics[width=\linewidth]{assets/response_comparison_12-25.png}
         \caption{$C_s=12$, $T_s=25$.}
         \label{fig:resp-1225}
     \end{figure}
-
+    The $(24,50)$ case is degenerate: since the server's EDF deadline is set to $t+T_s$ on activation, a period as large as $T_s=50$ gives the DSS a deadline no more urgent than the periodic tasks', so it is essentially always outranked by them and behaves indistinguishably from background service despite holding a reserved budget.
     \begin{figure}[H]
         \centering
         \includegraphics[width=\linewidth]{assets/response_comparison_24-50.png}
         \caption{$C_s=24$, $T_s=50$.}
         \label{fig:resp-2450}
     \end{figure}
-
-    The $(24,50)$ case is degenerate: since the server's EDF deadline is set to $t+T_s$ on activation, a period as large as $T_s=50$ gives the DSS a deadline no more urgent than the periodic tasks', so it is essentially always outranked by them and behaves indistinguishably from background service despite holding a reserved budget. This confirms that, for fixed $U_s$, it is specifically the period $T_s$ — through its direct role in the server's EDF priority — that governs responsiveness, and this benefit holds only while the aperiodic load remains modest relative to $U_s$ (see Section~\ref{sec:sim-load}).
+     This confirms that, for fixed $U_s$, it is specifically the period $T_s$ — through its direct role in the server's EDF priority — that governs responsiveness, and this benefit holds only while the aperiodic load remains modest relative to $U_s$ (see Section~\ref{sec:sim-load}).
 
     \subsection{Multi-Modal Response Time Distributions}
     A further effect appears once the budget $C_s$ becomes comparable to the mean aperiodic execution time (uniformly distributed over $[1,5]$\,ms, mean 3\,ms): the response-time distribution becomes multi-modal. In Fig.~\ref{fig:resp-37} ($C_s=3$, $T_s=7$), one peak groups requests with execution time $\leq 3$\,ms, which complete within a single burst; a second peak appears roughly one server period later, corresponding to requests of 4--5\,ms that need one additional replenishment before they can finish.
@@ -299,7 +293,9 @@
 
     \subsection{Effect of Aperiodic Load}
     \label{sec:sim-load}
-    Finally, $C_s=12$, $T_s=25$ is held fixed while the aperiodic arrival probability is increased from the baseline 0.025 (Fig.~\ref{fig:resp-1225}, mean response 5.72\,ms under DSS versus 7.24\,ms under background service) to 0.05 (Fig.~\ref{fig:resp-f05}, 7.99\,ms vs.\ 8.17\,ms)
+    Finally, $C_s=12$, $T_s=25$ is held fixed while the aperiodic arrival probability is increased from the baseline 0.025 (Fig.~\ref{fig:resp-1225}, mean response 5.72\,ms under DSS versus 7.24\,ms under background service) to 0.05 (Fig.~\ref{fig:resp-f05}, 7.99\,ms vs.\ 8.17\,ms) and 0.10 (Fig.~\ref{fig:resp-f1}, 13.90\,ms vs.\ 12.97\,ms).
+
+    As the offered aperiodic load grows toward and past the server's reserved bandwidth $U_s=0.48$, mean response time under DSS worsens and eventually exceeds that of the background scheduler, since a fixed budget and period bound how much aperiodic work can be absorbed per period regardless of demand.
 
     \begin{figure}[H]
         \centering
@@ -308,7 +304,6 @@
         \label{fig:resp-f05}
     \end{figure}
 
-    and 0.10 (Fig.~\ref{fig:resp-f1}, 13.90\,ms vs.\ 12.97\,ms).
 
     \begin{figure}[H]
         \centering
@@ -317,16 +312,23 @@
         \label{fig:resp-f1}
     \end{figure}
 
-    As the offered aperiodic load grows toward and past the server's reserved bandwidth $U_s=0.48$, mean response time under DSS worsens and eventually exceeds that of the background scheduler, since a fixed budget and period bound how much aperiodic work can be absorbed per period regardless of demand. Crucially, this degradation is confined to the aperiodic side: consistent with the schedulability guarantee of Section~\ref{sec:math-basics}, the periodic task set continued to meet every deadline in all three runs, since the server's interference is capped by $(C_s, T_s)$ independently of how many aperiodic requests are actually waiting. What changes under overload is only how much of that fixed bandwidth is available per request — once demand outpaces it, requests increasingly queue and remain unserved by the end of the simulation horizon rather than causing any periodic deadline to be missed.
+Crucially, this degradation is confined to the aperiodic side: consistent with the schedulability guarantee of Section~\ref{sec:math-basics}, the periodic task set continued to meet every deadline in all three runs, since the server's interference is capped by $(C_s, T_s)$ independently of how many aperiodic requests are actually waiting. What changes under overload is only how much of that fixed bandwidth is available per request — once demand outpaces it, requests increasingly queue and remain unserved by the end of the simulation horizon.
 
     \section{Conclusion}
     \label{sec:conclusion}
 
-    This paper set out to adapt the fixed-priority Sporadic Server to EDF-scheduled systems without reintroducing the "double-hit" anomaly that motivated the original algorithm. Starting from the requirement that a bandwidth-preserving aperiodic server must be indistinguishable, from the periodic task set's perspective, from an ordinary periodic task of utilisation $U_s = C_s/T_s$ (Section~\ref{sec:problem-statement}), we derived a burst-anchored replenishment rule — capacity consumed during an execution burst is returned exactly one server period after that burst \emph{began}, never earlier — and proved that it bounds the server's demand within any interval of length $T_s$ by $C_s$ (Section~\ref{sec:math-basics}). This rule was then formalised as an explicit three-state (\textsc{Idle}/\textsc{Ready}/\textsc{Exe}) machine suitable for direct implementation (Section~\ref{sec:algorithm}), whose per-scheduling-point and per-replenishment overhead was shown to be $O(N)$ and $O(1)$, respectively (Section~\ref{sec:overhead}).
+    The burst-anchored replenishment rule derived in Sections~\ref{sec:problem-statement}--\ref{sec:overhead} and validated in Sections~\ref{sec:uppaal}--\ref{sec:simulation} yields the following results:
 
-    This state machine was validated from two independent directions. First, it was re-encoded as a network of timed automata in UPPAAL (Section~\ref{sec:uppaal}), which served as a structural cross-check of the formalisation, though we found that UPPAAL's finite-state verifier does not yield sustainable exhaustive guarantees for a model whose relevant state evolves over an effectively unbounded number of discrete ticks. Second, a Python discrete-event simulation (Section~\ref{sec:simulation}) compared DSS against a background aperiodic scheduler under a fixed EDF periodic task set, and produced four consistent findings: (i) by competing on its own EDF deadline, DSS preempts periodic execution and reduces mean aperiodic response time relative to background service, without causing any periodic deadline miss; (ii) for a fixed utilisation $U_s = C_s/T_s$, the individual values of $C_s$ and $T_s$ still determine the granularity at which capacity is made available, so equal utilisation does not imply equal scheduling behaviour; (iii) because the server's EDF deadline is set to $t + T_s$ on activation, it is specifically the period $T_s$ — not $U_s$ alone — that governs responsiveness, to the point that a large $T_s$ can make DSS degenerate into background-equivalent behaviour even at maximal admissible utilisation; and (iv) once $C_s$ becomes comparable to individual request execution times, replenishment quantisation splits the response-time distribution into multiple modes, and under sustained aperiodic overload DSS's mean response time can exceed that of the background scheduler even though the periodic guarantee is never at risk.
+    \begin{itemize}
+        \item \textbf{Bounded demand, low overhead.} The rule bounds the server's demand within any interval of length $T_s$ by $C_s$, giving $O(N)$ per-scheduling-point and $O(1)$ per-replenishment overhead.
+        \item \textbf{Preemption benefit.} By competing on its own EDF deadline, DSS reduces mean aperiodic response time relative to background scheduling, without causing any periodic deadline miss.
+        \item \textbf{Granularity matters.} For a fixed utilisation $U_s=C_s/T_s$, the individual values of $C_s$ and $T_s$ still determine the granularity at which capacity is made available — equal utilisation does not imply equal scheduling behaviour.
+        \item \textbf{Period governs responsiveness.} Because the server's EDF deadline is set to $t+T_s$ on activation, it is $T_s$ — not $U_s$ alone — that governs responsiveness; a large $T_s$ can make DSS degenerate into background-equivalent behaviour even at maximal admissible utilisation.
+        \item \textbf{Multi-modal response times.} Once $C_s$ becomes comparable to individual request execution times, replenishment quantisation splits the response-time distribution into multiple modes.
+        \item \textbf{Overload behaviour.} Under sustained aperiodic overload, DSS's mean response time can exceed that of the background scheduler, even though the periodic guarantee is never at risk.
+    \end{itemize}
 
-    Taken together, these results confirm that DSS delivers on its core design goal — substantially improved aperiodic responsiveness at no cost to periodic schedulability — but also show that this benefit is sensitive to the choice of $T_s$ specifically, and bounded by $C_s$ once the offered aperiodic load exceeds what the server was provisioned for. The simulation in this work was limited to a single periodic task set, a single aperiodic workload distribution, and a purely synthetic arrival process; future work should extend the parameter sweep to a broader range of periodic task sets and aperiodic workloads, compare DSS empirically against TBS and CBS under identical conditions rather than only qualitatively, and evaluate the algorithm on an actual real-time kernel to quantify implementation overhead beyond the asymptotic analysis of Section~\ref{sec:overhead}.
+    Taken together, these results confirm that DSS delivers substantially improved aperiodic responsiveness at no cost to periodic schedulability, subject to a careful choice of $T_s$ and to the aperiodic load remaining within $U_s$. The evaluation was limited to a single periodic task set, a single aperiodic workload distribution, and a synthetic arrival process; future work should broaden the parameter sweep, compare DSS empirically against TBS and CBS under identical conditions, and evaluate the algorithm on a real-time kernel to measure implementation overhead beyond the asymptotic analysis of Section~\ref{sec:overhead}.
 
 
     \bibliography{main}
