@@ -1,12 +1,12 @@
 {
   "sa": {
-    "initial_temperature": 1,
-    "cooling_rate": 0.95,
+    "initial_temperature": 1.5,
+    "cooling_rate": 0.975,
     "min_temperature": 0.005,
     "iterations_per_temp": 10,
-    "runs": 50,
-    "alpha": 0.15,
-    "beta": 0.85,
+    "runs": 30,
+    "alpha": 0.25,
+    "beta": 0.75,
     "seed": 6324798
   },
   "resources": {

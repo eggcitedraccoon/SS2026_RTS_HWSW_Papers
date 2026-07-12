@@ -28,11 +28,6 @@
     urlcolor=blue
 }
 
-% -------------------------------------------------------------------
-% Visible TODO marker. Remove all \todo{...} calls before final submission.
-\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
-% -------------------------------------------------------------------
-
 \begin{document}
 
     \title{High-Level Synthesis with Simulated Annealing Scheduling}
@@ -54,8 +49,27 @@
     \setcounter{page}{1}
 
     \begin{abstract}
-        %TODO 3--4 sentences: (1) HLS scheduling/binding/allocation is a combinatorial, NP-hard problem that determines the latency-area trade-off of the generated hardware; (2) this paper formulates joint scheduling, resource binding, and resource allocation as a single-cost simulated annealing (SA) search; (3) a C++ simulator was built implementing this SA scheduler, seeded from an ASAP schedule, and evaluated on a 515-operation arithmetic data-flow graph; (4) state the headline observation (how the alpha/beta cost weighting reshapes the cost-vs-temperature search landscape around the ASAP-seeded start) once final experiments in Section~\ref{sec:simulation} are locked in.
+        High-level synthesis (HLS) scheduling, binding, and resource allocation are jointly NP-hard,
+        and together determine the latency--area trade-off of the generated data path. This paper
+        formulates the three sub-problems as a single simulated annealing (SA) search driven by one
+        scalarized latency--area cost, with the number of allocated resource instances itself treated
+        as a move within the search rather than fixed in advance. A C++ simulator implementing this
+        formulation -- seeded from an As-Soon-As-Possible (ASAP) schedule under a generous resource
+        pool, with a shift/rebind/add-resource/remove-resource move set and a feasibility-restoring
+        repair step -- is evaluated on a 515-operation arithmetic data-flow graph. Across three
+        cost-weighting configurations, the ASAP-seeded starting point is consistently a local minimum
+        of the cost surface, and the search wanders away from it by a similar amount during
+        exploration; the weighting instead determines what the low-temperature, near-greedy phase
+        finds once it arrives -- negligible further gain when latency dominates the cost, versus a
+        sharp late collapse to a much lower cost when area dominates. This shows that the
+        $\alpha/\beta$ weighting reshapes not just the final answer, but the shape of the search
+        itself.
     \end{abstract}
+
+    \begin{IEEEkeywords}
+        high-level synthesis, simulated annealing, scheduling, resource allocation, resource binding,
+        metaheuristics
+    \end{IEEEkeywords}
 
     \vspace{0.5em}
 
@@ -91,8 +105,8 @@
         cost function (Section~\ref{sec:math-basics});
         \item a concrete SA move set and repair mechanism that keeps every candidate schedule
         feasible after each move (Section~\ref{sec:algorithm});
-        \item a worst-case complexity analysis of the scheduler's per-move and per-run cost
-        (Section~\ref{sec:overhead});
+        \item a worst-case complexity analysis of the scheduler's per-move cost and total
+        search cost across all runs (Section~\ref{sec:overhead});
         \item an empirical study of how the $\alpha$/$\beta$ latency--area weighting reshapes the
         search landscape around the ASAP-seeded starting point, on a realistic DFG benchmark
         (Section~\ref{sec:simulation}).
@@ -113,7 +127,11 @@
     poorly with problem size \cite{HwangLeeHsu1991}. Simulated annealing has previously been used to
     jointly allocate registers, functional units, and interconnect in data-path synthesis
     \cite{Devadas1989}, and other metaheuristics such as genetic algorithms have likewise been applied
-    to combined HLS scheduling and allocation \cite{Heijligers1995}. This paper follows that SA-based
+    to combined HLS scheduling and allocation \cite{Heijligers1995}. SA is not specific to HLS: the
+    same accept-worsening-moves-under-a-cooling-schedule mechanism underlies metaheuristic solvers for
+    other combinatorial optimization problems, such as vehicle routing \cite{Blocho2020}, which
+    suggests the search dynamics studied here are a property of SA as an optimization method rather
+    than an artifact particular to data-path synthesis. This paper follows the HLS-specific SA-based
     line of work, with one difference: the number of allocated resource instances is itself a move
     within the same search, rather than being fixed in advance or optimized in a separate pass.
 
@@ -325,10 +343,11 @@
     \section{Simulation}
     \label{sec:simulation}
 
-    The concepts of Sections~\ref{sec:math-basics} and~\ref{sec:algorithm} are implemented in a
-    C++ simulator built around the model of Section~\ref{sec:problem-statement}. This section walks
-    through what the simulator consumes and produces, how its starting point is obtained, and then
-    makes one observation about how the search behaves as the cost function's weights change.
+    The concepts of Sections~\ref{sec:math-basics} and~\ref{sec:algorithm} are implemented in a C++ simulator built around the model of
+    Section~\ref{sec:problem-statement}. This section walks through what the simulator consumes and
+    produces, how its starting point is obtained, and then makes one observation about how the search
+    behaves as the cost function's weights change. Development of the C++ simulator was assisted by AI tools
+    \cite{Anthropic_Claude_2026, OpenAI_ChatGPT_2026}.
 
     \subsection{Input: Data-Flow Graph and Configuration}
     \label{sec:sim-input}
@@ -420,16 +439,12 @@ STORE(t515)
     \label{sec:sim-process}
 
     Simulated annealing does not start from an arbitrary or random solution: the initial state
-    $S_0$ handed to Algorithm~\ref{alg:sas} is an ASAP schedule computed under the \emph{full}
-    resource pool declared in the configuration, i.e.\ every \texttt{count}-many instance of every
-    type is available from the start. Each operation is placed at the earliest cycle its predecessors
-    allow and greedily bound to a free instance, with the same repair mechanism of
-    Section~\ref{sec:sa-moves} resolving any remaining conflicts. Because the pool is generous
-    relative to the parallelism present in the benchmark DFG, this ASAP-derived starting point is
-    already close to latency-optimal -- there is little room left to shorten the schedule further.
-    Its area, however, is essentially the configuration's maximum: every declared instance is
-    allocated whether or not the schedule actually uses it, so a large part of the initial resource
-    pool sits idle.
+    $S_0$ handed to Algorithm~\ref{alg:sas} is the ASAP-under-full-pool schedule described in
+    Section~\ref{sec:sa-state}, instantiated here on the benchmark DFG. Because the declared pool
+    is generous relative to the parallelism actually present in this DFG, $S_0$ is already close to
+    latency-optimal -- there is little room left to shorten the schedule further -- while its area
+    is essentially the configuration's maximum, since every declared instance is allocated whether
+    or not the schedule uses it, leaving a large part of the initial resource pool idle.
 
     This asymmetry -- an already-good latency paired with a deliberately wasteful area -- is not an
     incidental implementation detail. As Section~\ref{sec:sim-tradeoff} shows, it directly shapes how
@@ -447,8 +462,9 @@ STORE(t515)
     \emph{worst} (the maximum resulting cost across runs), and the \emph{mean} (the average resulting
     cost across runs). Every run also uses its own random seed (Section~\ref{sec:sim-input}), so the
     spread between best and worst reflects genuine run-to-run variation and not a shared random
-    sequence. Plotting these three quantities against temperature, read right to left from $T_0$ down
-    to $T_{\min}$, is the tool used below to visualize how the search behaves.
+    sequence. Plotting these three quantities against temperature -- with temperature decreasing along
+    the axis, so the plot reads left to right from $T_0$ down to $T_{\min}$, start to end of the
+    run -- is the tool used below to visualize how the search behaves.
 
     Figures~\ref{fig:tradeoff-075}--\ref{fig:tradeoff-025} show this plot for three configurations
     that differ only in $\alpha$ and $\beta$: latency-optimizing ($\alpha=0.75,\beta=0.25$), balanced
@@ -456,68 +472,80 @@ STORE(t515)
 
     \begin{figure}[t]
         \centering
-        \fbox{\begin{minipage}[c][4cm][c]{0.85\linewidth}
-            \centering\textit{Placeholder --- cost vs.\ temperature\\($\alpha=0.75$, $\beta=0.25$, latency-optimizing)}
-        \end{minipage}}
-        \caption{Cost vs.\ temperature, latency-optimizing weighting.}
+        \includegraphics[width=\linewidth]{assets/cost_vs_temp_combined_75-25.png}
+        \caption{Cost vs.\ temperature, latency-optimizing weighting ($\alpha=0.75$, $\beta=0.25$).}
         \label{fig:tradeoff-075}
     \end{figure}
 
     \begin{figure}[t]
         \centering
-        \fbox{\begin{minipage}[c][4cm][c]{0.85\linewidth}
-            \centering\textit{Placeholder --- cost vs.\ temperature\\($\alpha=0.5$, $\beta=0.5$, balanced)}
-        \end{minipage}}
-        \caption{Cost vs.\ temperature, balanced weighting.}
+        \includegraphics[width=\linewidth]{assets/cost_vs_temp_combined_5-5.png}
+        \caption{Cost vs.\ temperature, balanced weighting ($\alpha=0.5$, $\beta=0.5$).}
         \label{fig:tradeoff-050}
     \end{figure}
 
     \begin{figure}[t]
         \centering
-        \fbox{\begin{minipage}[c][4cm][c]{0.85\linewidth}
-            \centering\textit{Placeholder --- cost vs.\ temperature\\($\alpha=0.25$, $\beta=0.75$, area-optimizing)}
-        \end{minipage}}
-        \caption{Cost vs.\ temperature, area-optimizing weighting.}
+        \includegraphics[width=\linewidth]{assets/cost_vs_temp_combined_25-75.png}
+        \caption{Cost vs.\ temperature, area-optimizing weighting ($\alpha=0.25$, $\beta=0.75$).}
         \label{fig:tradeoff-025}
     \end{figure}
 
-    The one point these three plots are meant to make concerns the slope near $T_0$: how sharply the
-    worst and mean lines rise as the search first moves away from the ASAP-seeded starting point $S_0$
-    of Section~\ref{sec:sim-process}. Under the latency-optimizing weighting, $S_0$ sits
-    in a deep well of the cost surface -- it is already close to latency-optimal, so almost any move
-    away from it, even a small one, is charged heavily by the large $\alpha$, and the rise near $T_0$
-    is correspondingly steep. As $\beta$ grows and $\alpha$ shrinks, the same $S_0$ is no longer
-    sitting in a well at all: its area is close to the configuration's maximum, which is now the
-    dominant, heavily weighted term, so $S_0$ sits closer to a local \emph{peak} than a local minimum.
-    Moves that shed idle resource instances are downhill in almost every direction from there, so the
-    search can lower cost with little resistance, and the initial rise flattens out.
+    The one point these three plots are meant to make is not about the mid-temperature exploration
+    phase, which looks similar across all three weightings: in every configuration, $S_0$ is a local
+    minimum of the cost surface, and the resulting cost climbs by a comparable amount as the search
+    first moves away from it, since exploration at high temperature accepts worsening moves more or
+    less irrespective of which term of Equation~\eqref{eq:cost} is doing the charging. The difference
+    shows up only in the low-temperature endgame. As $T$ approaches $T_{\min}$, Equation~\eqref{eq:metropolis}
+    admits essentially only moves with $\Delta \leq 0$, so the search enters a near-greedy phase in
+    which the only moves that survive are ones that lower cost -- chiefly, shedding one of $S_0$'s many
+    idle resource instances. Under the latency-optimizing weighting, that near-greedy phase has little
+    to gain: removing an idle instance barely moves a cost dominated by the large $\alpha$ term, so the
+    run ends close to, or even above, where it started -- $S_0$ is, for practical purposes, the deepest
+    point the search reaches (Fig.~\ref{fig:tradeoff-075}). As $\beta$ grows, the same shedding moves
+    are worth far more, and the near-greedy phase has correspondingly more to gain: the final stretch
+    of cooling turns from a negligible correction into a sharp collapse that ends well below the
+    starting cost (Fig.~\ref{fig:tradeoff-025}), with the balanced weighting falling in between
+    (Fig.~\ref{fig:tradeoff-050}).
 
     Two caveats apply when reading these three plots side by side. First, the cost function itself
     changes between them, so the absolute cost values on the $y$-axis are not directly comparable
     across figures -- only the \emph{shape} of each curve, relative to its own starting cost, carries
     meaning. Second, that shape is not merely descriptive: it feeds back into the search through the
     Metropolis criterion of Equation~\eqref{eq:metropolis}, since the acceptance probability depends
-    on $\Delta$ in the very units these plots show. Read as a potential-energy landscape, the
-    latency-optimizing configuration presents a narrow, steep-sided well around $S_0$; the
-    area-optimizing configuration instead presents a shallow, almost flat basin that gives way to a
-    steady, near-monotonic fall as the temperature cools and idle resources are progressively removed.
+    on $\Delta$ in the very units these plots show. Read this way, the three configurations do not
+    differ in how far the search wanders during exploration, but in what the near-greedy endgame finds
+    once it arrives: a latency-optimizing weighting leaves $S_0$ as effectively the deepest point
+    reachable, while an area-optimizing weighting reveals a much deeper basin that the search only
+    falls into in the last few temperature steps before $T_{\min}$.
 
     \section{Conclusion}
     \label{sec:conclusion}
-    \todo{Summarize the contribution and restate the headline observation from
-    Section~\ref{sec:sim-tradeoff} (how the $\alpha$/$\beta$ weighting reshapes the
-    cost-vs-temperature landscape around the ASAP-seeded start) once the three
-    configurations have been fully run. State limitations honestly: a single
-    benchmark DFG (no CHStone/MachSuite generalization test), no quantitative
-    baseline comparison against ASAP or other scheduling heuristics, a fixed
-    geometric cooling schedule (no adaptive/reheating strategy), and no comparison
-    against other metaheuristics (GA, tabu search, PSO) or an exact ILP solution on a
-    small-scale instance for optimality-gap validation. Propose future work: a
-    quantitative SA-vs-ASAP evaluation, adaptive cooling, multi-objective
-    Pareto-front search (e.g., NSGA-II-style) instead of scalarized $\alpha/\beta$
-    cost, a larger benchmark suite, and integration with a real HLS front end (e.g.,
-    Vitis HLS or Bambu) to validate synthesized-hardware results against the
-    simulator's cost model.}
+
+    Across all three $\alpha/\beta$ configurations, the ASAP-seeded starting point $S_0$ is a local
+    minimum of the cost surface: during the mid-temperature exploration phase, the resulting cost
+    per run rises away from $S_0$ by a comparable amount regardless of weighting. What differs is
+    the low-temperature endgame, once the Metropolis criterion effectively admits only strictly
+    improving moves. Under the latency-optimizing weighting, that near-greedy phase finds little to
+    gain -- shedding idle resource instances barely moves a cost dominated by the large $\alpha$
+    term -- so the run ends at or above where it started, with $S_0$ effectively the best point the
+    search reaches. As $\beta$ grows, the same shedding moves pay off far more, and the final
+    descent turns from negligible to dramatic: under the area-optimizing weighting, the last stretch
+    of cooling collapses the cost well below its starting value. The $\alpha/\beta$ weighting
+    therefore does not change how far the search wanders during exploration -- it changes whether a
+    much deeper basin exists to fall into once the search turns greedy.
+
+    These results come with several limitations. The evaluation uses a single benchmark DFG, so
+    generalization of this landscape shape to graphs with substantially different topology,
+    resource mixes, or scale (e.g.\ CHStone or MachSuite kernels) remains untested. The
+    comparison is internal to the SA search itself: no quantitative baseline against ASAP, ALAP,
+    list scheduling, or force-directed scheduling is reported, so the absolute quality of the
+    schedules found -- not just their behavior under different weightings -- is not yet
+    established. The cooling schedule is a fixed geometric decay used for all three
+    configurations; an adaptive or reheating schedule might behave differently on the very
+    landscapes this paper characterizes. Finally, the SA formulation is compared against neither
+    other metaheuristics (genetic algorithms, tabu search, particle swarm optimization) nor an
+    exact ILP solution on a small-scale instance that could bound the optimality gap.
 
 
     \bibliography{main}
